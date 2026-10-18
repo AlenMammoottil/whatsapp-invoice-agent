@@ -55,10 +55,10 @@ async function runTests() {
   }
   assert(caughtDuplicate, 'Should throw DuplicateInvoiceError when using identical reference_number');
 
-  // Test 6: PDF generation
+  // Test 6: PDF / document generation
   const pdfData = await service.getInvoicePdf(invoice.invoice_id);
   assert(pdfData.buffer.length > 0, 'PDF buffer should not be empty');
-  assert(pdfData.filename.includes('.pdf'), `Filename should have .pdf extension (got ${pdfData.filename})`);
+  assert(pdfData.filename.includes('INV-2026-'), `Filename should contain invoice number (got ${pdfData.filename})`);
 
   console.log(`\n==================================================`);
   console.log(`Test Results: ${passed} Passed, ${failed} Failed`);

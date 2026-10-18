@@ -52,7 +52,7 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 // Start the Express HTTP server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n==================================================`);
   console.log(`🚀 WhatsApp Invoice Agent server started!`);
   console.log(`📡 Local URL: http://localhost:${PORT}`);
@@ -65,6 +65,15 @@ app.listen(PORT, () => {
     whatsappService.start();
   } else {
     console.log('[WhatsApp] Tip: Visit http://localhost:' + PORT + '/whatsapp to test the instant simulator or set START_WHATSAPP=true in .env to link your phone.');
+  }
+});
+
+server.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ Error: Port ${PORT} is already in use by another process.`);
+    console.error(`👉 Stop the process using port ${PORT} or configure PORT=<other_port> in .env\n`);
+  } else {
+    console.error('❌ Server startup error:', err);
   }
 });
 

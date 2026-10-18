@@ -58,8 +58,13 @@ router.post('/invoices', async (req: Request, res: Response) => {
     }
 
     const service = ZohoFactory.getService();
+    const isLive = ZohoFactory.isLiveConfigured();
     const invoice = await service.createInvoice(parseResult.data);
-    res.status(201).json({ message: 'Invoice created successfully', invoice });
+    res.status(201).json({
+      message: isLive ? 'Invoice created in Zoho Books' : 'Mock invoice created successfully (fictional test data)',
+      isMock: !isLive,
+      invoice,
+    });
   } catch (error: any) {
     if (error instanceof DuplicateInvoiceError) {
       res.status(409).json({
@@ -97,10 +102,15 @@ router.get('/invoices/:id', async (req: Request, res: Response) => {
 router.get('/invoices/:id/pdf', async (req: Request, res: Response) => {
   try {
     const service = ZohoFactory.getService();
+    const isLive = ZohoFactory.isLiveConfigured();
     const invoiceId = req.params['id'] as string;
     const { buffer, filename } = await service.getInvoicePdf(invoiceId);
-    res.setHeader('Content-Type', 'application/pdf');
+
+    res.setHeader('Content-Type', isLive ? 'application/pdf' : 'text/plain; charset=utf-8');
     res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    if (!isLive) {
+      res.setHeader('X-Mock-Notice', 'Simulated mock invoice; not a real Zoho Books invoice or real PDF');
+    }
     res.send(buffer);
   } catch (error: any) {
     res.status(404).json({ error: error.message });

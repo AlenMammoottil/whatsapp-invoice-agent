@@ -253,17 +253,19 @@ export class ZohoMockService implements IZohoService {
       throw new Error(`Invoice ${invoiceId} not found`);
     }
 
-    // Generate a simple, clean mock PDF text representation
+    // Generate a clean mock representation explicitly labeled as simulated test data
     const textContent = [
       '====================================================',
-      '                 ZOHO BOOKS INVOICE                 ',
+      '        SIMULATED MOCK INVOICE (FICTIONAL)          ',
+      ' NOTE: This is a simulated test invoice for testing.',
+      ' It is NOT a real Zoho Books invoice or real PDF.   ',
       '====================================================',
       `Invoice Number : ${invoice.invoice_number}`,
       `Date           : ${invoice.date}`,
       `Due Date       : ${invoice.due_date}`,
       `Reference      : ${invoice.reference_number}`,
       `Customer       : ${invoice.customer_name}`,
-      `Status         : ${invoice.status.toUpperCase()}`,
+      `Status         : ${invoice.status.toUpperCase()} (SIMULATED)`,
       '----------------------------------------------------',
       'Items:',
       ...invoice.line_items.map(
@@ -275,12 +277,12 @@ export class ZohoMockService implements IZohoService {
       `Tax            : $${invoice.tax_total.toFixed(2)}`,
       `TOTAL AMOUNT   : $${invoice.total.toFixed(2)} ${invoice.currency}`,
       '====================================================',
-      'Thank you for your business!',
+      'Fictional Test Data - No real transaction occurred',
       '====================================================',
     ].join('\n');
 
     const buffer = Buffer.from(textContent, 'utf-8');
-    const filename = `${invoice.invoice_number}.pdf`;
+    const filename = `${invoice.invoice_number}-mock.txt`;
     return { buffer, filename };
   }
 }
