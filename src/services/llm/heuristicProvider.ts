@@ -82,15 +82,16 @@ export class HeuristicProvider implements ILLMProvider {
       }
     }
 
-    // 2. Strip customer clause so we can cleanly parse line items
+    // 2. Strip greetings, action verbs, and customer clause so we can cleanly parse line items
     let itemText = text;
+    itemText = itemText.replace(/^(?:hi|hey|hello|good\s+morning|good\s+afternoon|good\s+evening|please|kindly)\b\s*,?\s*/i, '');
+    itemText = itemText.replace(/^(?:create|generate|raise|send|draft|bill|invoice|charge)\s+(?:an?\s+)?(?:invoice|bill)?\s*(?:to|for)?\s*/i, '');
     if (customerName !== 'Unknown Customer') {
       const custEscaped = customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const custPrefixRegex = new RegExp(`(?:invoice|bill|charge|send invoice to|create invoice for)?\\s*(?:to|for)?\\s*${custEscaped}\\s*(?:for|:|with|,)?`, 'i');
-      itemText = itemText.replace(custPrefixRegex, ' ');
+      itemText = itemText.replace(new RegExp(`^(?:to|for)?\\s*${custEscaped}\\s*(?:for|:|with|,)?\\s*`, 'i'), '');
+      itemText = itemText.replace(new RegExp(`(?:for|to)?\\s*${custEscaped}\\s*(?:for|:|with|,)?`, 'gi'), ' ');
     }
-    // Also remove leading action words like "please generate invoice", "create bill"
-    itemText = itemText.replace(/^(?:please|kindly)?\s*(?:create|generate|raise|send|draft)?\s*(?:an?\s+)?(?:invoice|bill)\s*(?:for)?/i, ' ').trim();
+    itemText = itemText.replace(/^(?:for|with|of)\s+/i, '').trim();
 
     // 3. Extract Line Items
     // Look for items with quantity and optional rate
