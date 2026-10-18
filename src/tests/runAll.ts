@@ -12,6 +12,9 @@ try {
   console.log('--- 3. Agent Orchestrator Tests ---');
   execSync('npx.cmd tsx src/tests/agentService.test.ts', { stdio: 'inherit' });
 
+  console.log('--- 4. WhatsApp Service Tests ---');
+  execSync('npx.cmd tsx src/tests/whatsappService.test.ts', { stdio: 'inherit' });
+
   console.log('🎉 ALL TEST SUITES PASSED SUCCESSFULLY!\n');
 } catch (error) {
   console.error('\n❌ One or more test suites failed.');
