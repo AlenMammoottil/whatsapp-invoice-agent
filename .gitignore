@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment files and credentials (secrets)
+.env
+.env.*
+!.env.example
+
+# WhatsApp authentication state / session files
+baileys_auth/
+baileys_auth_info/
+auth_info_baileys/
+*.session
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
