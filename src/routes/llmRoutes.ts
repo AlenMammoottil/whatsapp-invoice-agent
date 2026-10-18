@@ -52,4 +52,24 @@ router.post('/extract', async (req: Request, res: Response) => {
   }
 });
 
+// 4. Get evaluation benchmark summary
+router.get('/evaluation/report', async (_req: Request, res: Response) => {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const reportPath = path.resolve('evaluation_results.json');
+    if (fs.existsSync(reportPath)) {
+      const data = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
+      res.json(data);
+      return;
+    }
+    // If not yet run on disk, run evaluator
+    const { Evaluator } = await import('../evaluation/evaluator.js');
+    const summary = await Evaluator.evaluateProvider(LLMFactory.getPrimaryProvider().name);
+    res.json({ summary1: summary });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

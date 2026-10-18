@@ -36,6 +36,7 @@ app.get('/', (_req: Request, res: Response) => {
       llm_providers: '/api/llm/providers',
       llm_classify: 'POST /api/llm/classify',
       llm_extract: 'POST /api/llm/extract',
+      evaluation_report: '/api/llm/evaluation/report',
     }
   });
 });
