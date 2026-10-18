@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
+import zohoRoutes from './routes/zohoRoutes.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -10,6 +11,9 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 // Enable JSON request body parsing
 app.use(express.json());
 
+// Mount Zoho Books API routes
+app.use('/api/zoho', zohoRoutes);
+
 // Root welcome endpoint
 app.get('/', (_req: Request, res: Response) => {
   res.json({
@@ -17,7 +21,10 @@ app.get('/', (_req: Request, res: Response) => {
     description: 'AI-powered invoice assistant for WhatsApp and Zoho Books',
     status: 'running',
     endpoints: {
-      health: '/health'
+      health: '/health',
+      zoho_customers: '/api/zoho/customers',
+      zoho_items: '/api/zoho/items',
+      zoho_invoices: '/api/zoho/invoices',
     }
   });
 });
