@@ -6,7 +6,7 @@ import makeWASocket, {
 import pino from 'pino';
 import QRCode from 'qrcode';
 import { AgentService, AgentProcessInput, AgentProcessOutput } from './agentService.js';
-import { zohoMockService } from './zohoMockService.js';
+import { ZohoFactory } from './zohoFactory.js';
 
 export class WhatsAppService {
   private sock: WASocket | null = null;
@@ -17,7 +17,7 @@ export class WhatsAppService {
   private authFolder = './baileys_auth';
 
   constructor() {
-    this.agentService = new AgentService(zohoMockService);
+    this.agentService = new AgentService(ZohoFactory.getService());
   }
 
   /**

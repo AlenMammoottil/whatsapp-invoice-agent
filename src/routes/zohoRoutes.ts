@@ -1,16 +1,30 @@
 import { Router, Request, Response } from 'express';
-import { zohoMockService, DuplicateInvoiceError, CustomerNotFoundError, ItemNotFoundError } from '../services/zohoMockService.js';
+import { ZohoFactory } from '../services/zohoFactory.js';
+import { DuplicateInvoiceError, CustomerNotFoundError, ItemNotFoundError } from '../services/zohoMockService.js';
 import { CreateInvoicePayloadSchema } from '../types/schemas.js';
 
 const router = Router();
 
+// 0. Check current active Zoho mode (live vs mock)
+router.get('/mode', (_req: Request, res: Response) => {
+  const isLive = ZohoFactory.isLiveConfigured();
+  res.json({
+    mode: isLive ? 'live_zoho_api' : 'fictional_mock_catalog',
+    isLiveConfigured: isLive,
+    message: isLive
+      ? 'Connected to live Zoho Books API'
+      : 'Operating safely in mock catalog mode (no real credentials needed)',
+  });
+});
+
 // 1. List or search customers
 router.get('/customers', async (req: Request, res: Response) => {
   try {
+    const service = ZohoFactory.getService();
     const query = req.query['q'] as string | undefined;
     const customers = query
-      ? await zohoMockService.findCustomer(query)
-      : await zohoMockService.getCustomers();
+      ? await service.findCustomer(query)
+      : await service.getCustomers();
     res.json({ count: customers.length, customers });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -20,10 +34,11 @@ router.get('/customers', async (req: Request, res: Response) => {
 // 2. List or search items
 router.get('/items', async (req: Request, res: Response) => {
   try {
+    const service = ZohoFactory.getService();
     const query = req.query['q'] as string | undefined;
     const items = query
-      ? await zohoMockService.findItems(query)
-      : await zohoMockService.getItems();
+      ? await service.findItems(query)
+      : await service.getItems();
     res.json({ count: items.length, items });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -42,7 +57,8 @@ router.post('/invoices', async (req: Request, res: Response) => {
       return;
     }
 
-    const invoice = await zohoMockService.createInvoice(parseResult.data);
+    const service = ZohoFactory.getService();
+    const invoice = await service.createInvoice(parseResult.data);
     res.status(201).json({ message: 'Invoice created successfully', invoice });
   } catch (error: any) {
     if (error instanceof DuplicateInvoiceError) {
@@ -65,7 +81,8 @@ router.post('/invoices', async (req: Request, res: Response) => {
 // 4. Get invoice by ID
 router.get('/invoices/:id', async (req: Request, res: Response) => {
   try {
-    const invoice = await zohoMockService.getInvoice(req.params['id'] as string);
+    const service = ZohoFactory.getService();
+    const invoice = await service.getInvoice(req.params['id'] as string);
     if (!invoice) {
       res.status(404).json({ error: `Invoice ${req.params['id']} not found` });
       return;
@@ -79,9 +96,10 @@ router.get('/invoices/:id', async (req: Request, res: Response) => {
 // 5. Download or view invoice PDF
 router.get('/invoices/:id/pdf', async (req: Request, res: Response) => {
   try {
+    const service = ZohoFactory.getService();
     const invoiceId = req.params['id'] as string;
-    const { buffer, filename } = await zohoMockService.getInvoicePdf(invoiceId);
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    const { buffer, filename } = await service.getInvoicePdf(invoiceId);
+    res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
     res.send(buffer);
   } catch (error: any) {
