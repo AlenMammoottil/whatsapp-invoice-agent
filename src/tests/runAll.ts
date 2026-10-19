@@ -18,6 +18,9 @@ try {
   console.log('--- 5. Bug-Fix Regression Tests ---');
   execSync('npx.cmd tsx src/tests/bugfixRegression.test.ts', { stdio: 'inherit' });
 
+  console.log('--- 6. LLM Fallback & Resilience Tests ---');
+  execSync('npx.cmd tsx src/tests/llmFallback.test.ts', { stdio: 'inherit' });
+
   console.log('🎉 ALL TEST SUITES PASSED SUCCESSFULLY!\n');
 } catch (error) {
   console.error('\n❌ One or more test suites failed.');

@@ -10,9 +10,14 @@ export class GeminiProvider implements ILLMProvider {
   model: string;
   private apiKey: string;
 
-  constructor(options?: { apiKey?: string; model?: string }) {
+  private maxRetries: number;
+  private timeoutMs: number;
+
+  constructor(options?: { apiKey?: string; model?: string; maxRetries?: number; timeoutMs?: number }) {
     this.apiKey = options?.apiKey || process.env['GEMINI_API_KEY'] || '';
     this.model = options?.model || process.env['GEMINI_MODEL'] || 'gemini-1.5-flash';
+    this.maxRetries = options?.maxRetries ?? (process.env['GEMINI_MAX_RETRIES'] ? parseInt(process.env['GEMINI_MAX_RETRIES'], 10) : 2);
+    this.timeoutMs = options?.timeoutMs ?? (process.env['GEMINI_TIMEOUT_MS'] ? parseInt(process.env['GEMINI_TIMEOUT_MS'], 10) : 15000);
   }
 
   private async callGenerateContent(systemPrompt: string, userMessage: string): Promise<{ text: string; latencyMs: number }> {
@@ -22,17 +27,35 @@ export class GeminiProvider implements ILLMProvider {
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
     const startTime = Date.now();
-    const maxRetries = 4;
 
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nTask:\n${userMessage}` }] }],
-          generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
-        }),
-      });
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nTask:\n${userMessage}` }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
+          }),
+          signal: controller.signal,
+        });
+      } catch (fetchErr: any) {
+        clearTimeout(timer);
+        const isTimeout = fetchErr.name === 'AbortError' || fetchErr.message?.includes('abort');
+        const isNetwork = fetchErr.message?.includes('fetch failed') || fetchErr.code === 'ECONNRESET';
+        if ((isTimeout || isNetwork) && attempt < this.maxRetries) {
+          console.warn(`  ⚠️  Gemini ${isTimeout ? 'timeout' : 'network error'} on attempt ${attempt}/${this.maxRetries} — retrying in 1s...`);
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+        throw new Error(`Gemini request failed: ${isTimeout ? 'Request timed out after ' + this.timeoutMs + 'ms' : fetchErr.message}`);
+      } finally {
+        clearTimeout(timer);
+      }
 
       if (response.ok) {
         const latencyMs = Date.now() - startTime;
@@ -42,16 +65,18 @@ export class GeminiProvider implements ILLMProvider {
         return { text: content, latencyMs };
       }
 
-      // Retry on 503 (overloaded) or 429 (rate limit)
-      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
-        const waitMs = Math.pow(2, attempt) * 1500; // 3s, 6s, 12s
-        console.warn(`  ⚠️  Gemini ${response.status} on attempt ${attempt}/${maxRetries} — retrying in ${waitMs / 1000}s...`);
+      // Retry once on 503 (high demand) or 429 (rate limit) with shorter delay
+      if ((response.status === 503 || response.status === 429) && attempt < this.maxRetries) {
+        const waitMs = attempt * 1000; // 1s
+        console.warn(`  ⚠️  Gemini ${response.status} on attempt ${attempt}/${this.maxRetries} — retrying in ${waitMs / 1000}s...`);
         await new Promise(r => setTimeout(r, waitMs));
         continue;
       }
 
       const errorText = await response.text();
-      throw new Error(`Gemini API error (${response.status}): ${errorText}`);
+      const err = new Error(`Gemini API error (${response.status}): ${errorText}`);
+      (err as any).status = response.status;
+      throw err;
     }
 
     throw new Error('Gemini: max retries exceeded');

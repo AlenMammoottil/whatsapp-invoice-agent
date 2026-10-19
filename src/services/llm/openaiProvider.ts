@@ -11,10 +11,13 @@ export class OpenAIProvider implements ILLMProvider {
   private apiKey: string;
   private baseUrl: string;
 
-  constructor(options?: { apiKey?: string; model?: string; baseUrl?: string }) {
+  private timeoutMs: number;
+
+  constructor(options?: { apiKey?: string; model?: string; baseUrl?: string; timeoutMs?: number }) {
     this.apiKey = options?.apiKey || process.env['OPENAI_API_KEY'] || process.env['GROQ_API_KEY'] || '';
     this.model = options?.model || process.env['OPENAI_MODEL'] || 'gpt-4o-mini';
     this.baseUrl = options?.baseUrl || process.env['OPENAI_BASE_URL'] || 'https://api.openai.com/v1';
+    this.timeoutMs = options?.timeoutMs ?? (process.env['OPENAI_TIMEOUT_MS'] ? parseInt(process.env['OPENAI_TIMEOUT_MS'], 10) : 20000);
   }
 
   private async callChatCompletion(systemPrompt: string, userMessage: string): Promise<{ text: string; latencyMs: number }> {
@@ -26,22 +29,41 @@ export class OpenAIProvider implements ILLMProvider {
     const maxRetries = 5;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      const response = await fetch(`${this.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: this.model,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage },
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.1, // low temperature for deterministic, consistent extraction
-        }),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+
+      let response: Response;
+      try {
+        response = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: this.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMessage },
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.1, // low temperature for deterministic, consistent extraction
+          }),
+          signal: controller.signal,
+        });
+      } catch (fetchErr: any) {
+        clearTimeout(timer);
+        const isTimeout = fetchErr.name === 'AbortError' || fetchErr.message?.includes('abort');
+        const isNetwork = fetchErr.message?.includes('fetch failed') || fetchErr.code === 'ECONNRESET';
+        if ((isTimeout || isNetwork) && attempt < maxRetries) {
+          console.warn(`  ⚠️  Groq/OpenAI ${isTimeout ? 'timeout' : 'network error'} on attempt ${attempt}/${maxRetries} — retrying in 1s...`);
+          await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+        throw new Error(`OpenAI request failed: ${isTimeout ? 'Request timed out after ' + this.timeoutMs + 'ms' : fetchErr.message}`);
+      } finally {
+        clearTimeout(timer);
+      }
 
       if (response.ok) {
         const latencyMs = Date.now() - startTime;

@@ -13,6 +13,8 @@ export interface AgentProcessInput {
   messageId?: string;
   groupId?: string;
   providerName?: string;
+  /** Explicit LLM provider instance to use (overrides providerName lookup) */
+  llmProvider?: ILLMProvider;
   autoApprove?: boolean;
   /** If true, use the injected StorageService instead of the singleton (for tests) */
   _storage?: StorageService;
@@ -42,10 +44,12 @@ function formatAmount(amount: number, currency: string | null | undefined): stri
 export class AgentService {
   private matchingService: MatchingService;
   private storage: StorageService;
+  private customLLM?: ILLMProvider;
 
-  constructor(private zohoService: IZohoService, storage?: StorageService) {
+  constructor(private zohoService: IZohoService, storage?: StorageService, defaultLLM?: ILLMProvider) {
     this.matchingService = new MatchingService(zohoService);
     this.storage = storage || storageService;
+    this.customLLM = defaultLLM;
   }
 
   /**
@@ -725,11 +729,22 @@ export class AgentService {
     // -------------------------------------------------------------
     // 2. Classify Intent via LLM
     // -------------------------------------------------------------
-    const llm: ILLMProvider = input.providerName
-      ? LLMFactory.getProvider(input.providerName)
-      : LLMFactory.getPrimaryProvider();
+    const llm: ILLMProvider = input.llmProvider
+      || (input.providerName ? LLMFactory.getProvider(input.providerName) : (this.customLLM || LLMFactory.getPrimaryProvider()));
 
-    const classification = await llm.classifyIntent(input.messageText);
+    let classification;
+    try {
+      classification = await llm.classifyIntent(input.messageText);
+    } catch (llmErr: any) {
+      console.error(`❌ [AgentService] LLM intent classification failed:`, llmErr.message);
+      return {
+        intent: 'GENERAL_CHAT',
+        replyText: `⚠️ *Service Temporarily Unavailable*\nOur AI assistant is currently experiencing high demand or a temporary service interruption. Please try your request again in a few moments, or format it as:\n*"Bill [Customer] for [Quantity] [Item]"*`,
+        clarificationNeeded: false,
+        duplicateDetected: false,
+        latencyMs: Date.now() - startTime,
+      };
+    }
 
     // -------------------------------------------------------------
     // 3. Handle QUESTION Intent
@@ -763,7 +778,19 @@ export class AgentService {
     // -------------------------------------------------------------
     // 5. Handle INVOICE_REQUEST Intent
     // -------------------------------------------------------------
-    const extraction = await llm.extractInvoice(input.messageText);
+    let extraction;
+    try {
+      extraction = await llm.extractInvoice(input.messageText);
+    } catch (extractErr: any) {
+      console.error(`❌ [AgentService] LLM invoice extraction failed:`, extractErr.message);
+      return {
+        intent: 'INVOICE_REQUEST',
+        replyText: `⚠️ *Service Temporarily Unavailable*\nOur AI assistant encountered an issue while extracting details from your message. Please try again shortly or provide the request in this format:\n*"Bill [Customer] for [Quantity] [Item]"*`,
+        clarificationNeeded: false,
+        duplicateDetected: false,
+        latencyMs: Date.now() - startTime,
+      };
+    }
 
     // Bonus: Check for "rate same as last time"
     if (text.toLowerCase().includes('same as last time')) {
