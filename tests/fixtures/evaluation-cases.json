@@ -1,0 +1,633 @@
+[
+  {
+    "id": "case_01",
+    "message": "Please bill Royal Tyre House for 4 units of Car Tyre 14-inch",
+    "salesRep": "Vikram (Delhi Zone)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Royal Tyre House",
+    "expectedItems": [
+      {
+        "name": "Car Tyre 14-inch",
+        "quantity": 4,
+        "rate": 3000,
+        "catalogRate": 3000,
+        "rateSource": "catalog"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "standard",
+    "description": "Clean single item invoice using catalog price",
+    "groundTruthNotes": "Resolves Royal Tyre House and Car Tyre 14-inch at catalog rate ₹3000."
+  },
+  {
+    "id": "case_02",
+    "message": "Invoice National Tyre Centre for 2 Truck Tyre @ 8000",
+    "salesRep": "Sunil (North Zone)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "National Tyre Centre",
+    "expectedItems": [
+      {
+        "name": "Truck Tyre",
+        "quantity": 2,
+        "rate": 8000,
+        "catalogRate": 8000,
+        "rateSource": "catalog"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "standard",
+    "description": "Single item with explicit catalog rate matching",
+    "groundTruthNotes": "Commercial truck tyre with matching catalog rate."
+  },
+  {
+    "id": "case_03",
+    "message": "Create invoice for City Motors & Tyres: 6 Car Tyre 15-inch and 2 SUV Tyre 16-inch",
+    "salesRep": "Pooja (West Zone)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "City Motors & Tyres",
+    "expectedItems": [
+      {
+        "name": "Car Tyre 15-inch",
+        "quantity": 6,
+        "rate": 3500,
+        "catalogRate": 3500,
+        "rateSource": "catalog"
+      },
+      {
+        "name": "SUV Tyre 16-inch",
+        "quantity": 2,
+        "rate": 5000,
+        "catalogRate": 5000,
+        "rateSource": "catalog"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "standard",
+    "description": "Multi-item invoice with car and SUV tyres",
+    "groundTruthNotes": "Two distinct product lines with explicit quantities."
+  },
+  {
+    "id": "case_04",
+    "message": "Please bill Metro Tyres for 10 Scooter Tyre",
+    "salesRep": "Manoj (Central Hub)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Metro Tyres",
+    "expectedItems": [
+      {
+        "name": "Scooter Tyre",
+        "quantity": 10,
+        "rate": 900,
+        "catalogRate": 900,
+        "rateSource": "catalog"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "standard",
+    "description": "Bulk scooter tyre order",
+    "groundTruthNotes": "Clean resolution of Metro Tyres and 10 Scooter Tyres."
+  },
+  {
+    "id": "case_05",
+    "message": "Bill Acme Corp for 2 hours of web development @ 150",
+    "salesRep": "Alice (Direct Sales)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Acme Corporation",
+    "expectedItems": [
+      {
+        "name": "Web Development Consultation",
+        "quantity": 2,
+        "rate": 150,
+        "catalogRate": 150,
+        "rateSource": "catalog"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "standard",
+    "description": "Legacy consulting invoice",
+    "groundTruthNotes": "Backward compatible test item."
+  },
+  {
+    "id": "case_06",
+    "message": "Generate invoice for TechNova Solutions: 3 chairs at $250 each",
+    "salesRep": "Bob (Enterprise)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "TechNova Solutions",
+    "expectedItems": [
+      {
+        "name": "Ergonomic Office Chair",
+        "quantity": 3,
+        "rate": 250,
+        "catalogRate": 250,
+        "rateSource": "catalog"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "standard",
+    "description": "Office hardware invoice",
+    "groundTruthNotes": "Clean physical item extraction."
+  },
+  {
+    "id": "case_07",
+    "message": "VK\nred lenzo alloy 18 inch x 4\nrate 5200",
+    "salesRep": "Rajesh (Field Agent 1)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "VK Enterprises",
+    "expectedItems": [
+      {
+        "name": "Alloy Wheel 18\" Lenzo - Red",
+        "quantity": 4,
+        "rate": 5200,
+        "catalogRate": 5200,
+        "rateSource": "catalog"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "messy_shorthand",
+    "description": "Screening task PDF exact example 1 (VK shorthand)",
+    "groundTruthNotes": "\"VK\" maps to VK Enterprises, \"red lenzo alloy 18 inch\" maps to Alloy Wheel 18\" Lenzo - Red."
+  },
+  {
+    "id": "case_08",
+    "message": "Sharma motors - 17\" Lenzo wheel black, 2 pcs @ 4800",
+    "salesRep": "Anil (Field Agent 2)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Sharma Motors",
+    "expectedItems": [
+      {
+        "name": "Alloy Wheel 17\" Lenzo - Black",
+        "quantity": 2,
+        "rate": 4800,
+        "catalogRate": 4800,
+        "rateSource": "catalog"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "messy_shorthand",
+    "description": "Screening task PDF exact example 2 (dash separator, 17\" black wheel)",
+    "groundTruthNotes": "Resolves Sharma Motors and Alloy Wheel 17\" Lenzo - Black."
+  },
+  {
+    "id": "case_09",
+    "message": "ABC needs three 14 inch tyres",
+    "salesRep": "Sunil (Quick Messenger)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": null,
+    "expectedItems": [
+      {
+        "name": "Car Tyre 14-inch",
+        "quantity": 3,
+        "rate": 3000
+      }
+    ],
+    "shouldClarify": true,
+    "expectedClarificationReason": "AMBIGUOUS_CUSTOMER",
+    "isInvoiceCreationAllowed": false,
+    "category": "ambiguous",
+    "description": "Screening task PDF exact example 3 (\"ABC\" is ambiguous between Tyres & Wheels)",
+    "groundTruthNotes": "\"ABC\" matches both ABC Tyres & Traders and ABC Wheels trading. Must clarify customer!"
+  },
+  {
+    "id": "case_10",
+    "message": "Prepare bill for Metro, five scooter tyres",
+    "salesRep": "Ramesh (Field Rep)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": null,
+    "expectedItems": [
+      {
+        "name": "Scooter Tyre",
+        "quantity": 5,
+        "rate": 900
+      }
+    ],
+    "shouldClarify": true,
+    "expectedClarificationReason": "AMBIGUOUS_CUSTOMER",
+    "isInvoiceCreationAllowed": false,
+    "category": "ambiguous",
+    "description": "Screening task PDF prompt example (\"Metro\" is ambiguous between Metro Tyres and Metro Wheels)",
+    "groundTruthNotes": "\"Metro\" matches both Metro Tyres and Metro Wheels. Must clarify customer!"
+  },
+  {
+    "id": "case_11",
+    "message": "Need 2 truck tyres for Royal Tyre House",
+    "salesRep": "Karan (Commercial)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Royal Tyre House",
+    "expectedItems": [
+      {
+        "name": "Truck Tyre",
+        "quantity": 2,
+        "rate": 8000
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "messy_shorthand",
+    "description": "Natural phrasing \"Need 2 truck tyres for...\"",
+    "groundTruthNotes": "Royal Tyre House unambiguously identified."
+  },
+  {
+    "id": "case_12",
+    "message": "raise inv for Gupta Auto\n8 nos 18 alloy red lenzo\nrate same as last time",
+    "salesRep": "Deepak (Key Accounts)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Gupta Auto Spares",
+    "expectedItems": [
+      {
+        "name": "Alloy Wheel 18\" Lenzo - Red",
+        "quantity": 8,
+        "rate": 5200
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "messy_shorthand",
+    "description": "Screening task PDF exact example 4 (\"rate same as last time\")",
+    "groundTruthNotes": "\"Gupta Auto\" maps to Gupta Auto Spares, \"18 alloy red lenzo\" maps to Alloy Wheel 18\" Lenzo - Red."
+  },
+  {
+    "id": "case_13",
+    "message": "Make an invoice for 2 Car Tyre 13-inch for ABC Trading",
+    "salesRep": "Vikram (Delhi Zone)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "ABC Tyres & Traders",
+    "expectedItems": [
+      {
+        "name": "Car Tyre 13-inch",
+        "quantity": 2,
+        "rate": 2500
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "messy_shorthand",
+    "description": "Customer alias \"ABC Trading\" uniquely maps to ABC Tyres & Traders",
+    "groundTruthNotes": "\"ABC Trading\" is an approved unique alias for ABC Tyres & Traders."
+  },
+  {
+    "id": "case_14",
+    "message": "National Auto - 4 pcs 17 inch bike tyre",
+    "salesRep": "Anil (Field Agent 2)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "National Auto Spares",
+    "expectedItems": [
+      {
+        "name": "Bike Tyre 17-inch",
+        "quantity": 4,
+        "rate": 1200
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": true,
+    "category": "messy_shorthand",
+    "description": "Shorthand \"National Auto\" and \"17 inch bike tyre\"",
+    "groundTruthNotes": "Maps National Auto Spares and Bike Tyre 17-inch."
+  },
+  {
+    "id": "case_15",
+    "message": "VK red wheel 4",
+    "salesRep": "Rajesh (Field Agent 1)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "VK Enterprises",
+    "expectedItems": [],
+    "shouldClarify": true,
+    "expectedClarificationReason": "AMBIGUOUS_ITEM",
+    "isInvoiceCreationAllowed": false,
+    "category": "ambiguous",
+    "description": "Screening task PDF exact example (\"VK red wheel 4\" - ambiguous between 18\" and 17\" red wheels)",
+    "groundTruthNotes": "Must NOT guess! Must ask: \"Which wheel? Alloy Wheel 18\\\" Lenzo - Red or Alloy Wheel 17\\\" Lenzo - Red?\""
+  },
+  {
+    "id": "case_16",
+    "message": "Invoice ABC for 4 tyres",
+    "salesRep": "Sunil (Quick Messenger)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": null,
+    "expectedItems": [],
+    "shouldClarify": true,
+    "expectedClarificationReason": "AMBIGUOUS_CUSTOMER",
+    "isInvoiceCreationAllowed": false,
+    "category": "ambiguous",
+    "description": "Both customer \"ABC\" and product \"tyres\" are ambiguous",
+    "groundTruthNotes": "Must clarify customer first before guessing."
+  },
+  {
+    "id": "case_17",
+    "message": "Please send an invoice to Royal Tyre House for 4 car tyres",
+    "salesRep": "Vikram (Delhi Zone)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Royal Tyre House",
+    "expectedItems": [],
+    "shouldClarify": true,
+    "expectedClarificationReason": "AMBIGUOUS_ITEM",
+    "isInvoiceCreationAllowed": false,
+    "category": "ambiguous",
+    "description": "\"car tyres\" without size (13, 14, 15, 16 inch)",
+    "groundTruthNotes": "Prompt rule: if multiple sizes exist, ask which size is required."
+  },
+  {
+    "id": "case_18",
+    "message": "Bill City Motors for 2 SUV tyres",
+    "salesRep": "Pooja (West Zone)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "City Motors & Tyres",
+    "expectedItems": [],
+    "shouldClarify": true,
+    "expectedClarificationReason": "AMBIGUOUS_ITEM",
+    "isInvoiceCreationAllowed": false,
+    "category": "ambiguous",
+    "description": "\"SUV tyres\" without specifying 16-inch or 17-inch",
+    "groundTruthNotes": "Catalog has SUV Tyre 16-inch and 17-inch. Clarification required."
+  },
+  {
+    "id": "case_19",
+    "message": "Charge TechNova for 1 hosting",
+    "salesRep": "Bob (Enterprise)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "TechNova Solutions",
+    "expectedItems": [],
+    "shouldClarify": true,
+    "expectedClarificationReason": "AMBIGUOUS_ITEM",
+    "isInvoiceCreationAllowed": false,
+    "category": "ambiguous",
+    "description": "Legacy ambiguous hosting (Standard vs Premium)",
+    "groundTruthNotes": "Must ask which hosting plan."
+  },
+  {
+    "id": "case_20",
+    "message": "Bill National for 2 bike tyres",
+    "salesRep": "Anil (Field Agent 2)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": null,
+    "expectedItems": [],
+    "shouldClarify": true,
+    "expectedClarificationReason": "AMBIGUOUS_CUSTOMER",
+    "isInvoiceCreationAllowed": false,
+    "category": "ambiguous",
+    "description": "\"National\" matches National Auto Spares and National Tyre Centre",
+    "groundTruthNotes": "Must clarify customer."
+  },
+  {
+    "id": "case_21",
+    "message": "Please generate an invoice for 4 Car Tyre 14-inch",
+    "salesRep": "Vikram (Delhi Zone)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": null,
+    "expectedItems": [
+      {
+        "name": "Car Tyre 14-inch",
+        "quantity": 4
+      }
+    ],
+    "shouldClarify": true,
+    "expectedClarificationReason": "MISSING_CUSTOMER",
+    "isInvoiceCreationAllowed": false,
+    "category": "missing_info",
+    "description": "Missing customer name entirely",
+    "groundTruthNotes": "No customer provided; must ask who to bill."
+  },
+  {
+    "id": "case_22",
+    "message": "Send an invoice to Royal Tyre House",
+    "salesRep": "Karan (Commercial)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Royal Tyre House",
+    "expectedItems": [],
+    "shouldClarify": true,
+    "expectedClarificationReason": "MISSING_ITEMS",
+    "isInvoiceCreationAllowed": false,
+    "category": "missing_info",
+    "description": "Missing line items / products",
+    "groundTruthNotes": "Customer given, but no products specified."
+  },
+  {
+    "id": "case_23",
+    "message": "Bill Wayne Enterprises for 4 Car Tyre 14-inch",
+    "salesRep": "Pooja (West Zone)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": null,
+    "expectedItems": [
+      {
+        "name": "Car Tyre 14-inch",
+        "quantity": 4
+      }
+    ],
+    "shouldClarify": true,
+    "expectedClarificationReason": "MISSING_CUSTOMER",
+    "isInvoiceCreationAllowed": false,
+    "category": "missing_info",
+    "description": "Unknown customer not in database",
+    "groundTruthNotes": "Wayne Enterprises does not exist in Zoho Books. Suggest existing clients."
+  },
+  {
+    "id": "case_24",
+    "message": "Bill Metro Tyres for quantum anti-gravity propulsion unit x 1",
+    "salesRep": "Deepak (Key Accounts)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Metro Tyres",
+    "expectedItems": [],
+    "shouldClarify": true,
+    "expectedClarificationReason": "MISSING_ITEMS",
+    "isInvoiceCreationAllowed": false,
+    "category": "missing_info",
+    "description": "Fictional product not in catalog",
+    "groundTruthNotes": "Item not in Zoho catalog; suggest existing products."
+  },
+  {
+    "id": "case_25",
+    "message": "Make an invoice for the usual items for Metro Tyres",
+    "salesRep": "Manoj (Central Hub)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Metro Tyres",
+    "expectedItems": [],
+    "shouldClarify": true,
+    "expectedClarificationReason": "MISSING_ITEMS",
+    "isInvoiceCreationAllowed": false,
+    "category": "missing_info",
+    "description": "Unspecified \"usual items\"",
+    "groundTruthNotes": "Agent cannot guess \"usual items\"; must ask for product details."
+  },
+  {
+    "id": "case_26",
+    "message": "VK red lenzo alloy 18 inch x 4 @ 5000 special deal approved by VP",
+    "salesRep": "Rajesh (Field Agent 1)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "VK Enterprises",
+    "expectedItems": [
+      {
+        "name": "Alloy Wheel 18\" Lenzo - Red",
+        "quantity": 4,
+        "rate": 5000,
+        "catalogRate": 5200,
+        "rateSource": "explicit_override"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": false,
+    "category": "price_override",
+    "description": "Explicit rate override (₹5000 vs catalog ₹5200)",
+    "groundTruthNotes": "Must flag price override and require human approval before issuing invoice."
+  },
+  {
+    "id": "case_27",
+    "message": "Bill Royal Tyre House for 10 Car Tyre 13-inch at discount rate 2200 each",
+    "salesRep": "Vikram (Delhi Zone)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Royal Tyre House",
+    "expectedItems": [
+      {
+        "name": "Car Tyre 13-inch",
+        "quantity": 10,
+        "rate": 2200,
+        "catalogRate": 2500,
+        "rateSource": "explicit_override"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": false,
+    "category": "price_override",
+    "description": "Discounted rate override (₹2200 vs catalog ₹2500)",
+    "groundTruthNotes": "Must flag price override warning."
+  },
+  {
+    "id": "case_28",
+    "message": "Please bill Acme Corp for 1 chair @ 199",
+    "salesRep": "Alice (Direct Sales)",
+    "expectedIntent": "INVOICE_REQUEST",
+    "expectedCustomer": "Acme Corporation",
+    "expectedItems": [
+      {
+        "name": "Ergonomic Office Chair",
+        "quantity": 1,
+        "rate": 199,
+        "catalogRate": 250,
+        "rateSource": "explicit_override"
+      }
+    ],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": false,
+    "category": "price_override",
+    "description": "Custom chair price ($199 vs catalog $250)",
+    "groundTruthNotes": "Requires explicit confirmation."
+  },
+  {
+    "id": "case_29",
+    "message": "What items are available in our catalog right now?",
+    "salesRep": "Pooja (West Zone)",
+    "expectedIntent": "QUESTION",
+    "expectedCustomer": null,
+    "expectedItems": [],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": false,
+    "category": "question",
+    "description": "Catalog inquiry",
+    "groundTruthNotes": "Must return product catalog list, not create an invoice."
+  },
+  {
+    "id": "case_30",
+    "message": "How much is the 13-inch car tyre?",
+    "salesRep": "Anil (Field Agent 2)",
+    "expectedIntent": "QUESTION",
+    "expectedCustomer": null,
+    "expectedItems": [],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": false,
+    "category": "question",
+    "description": "Specific pricing inquiry",
+    "groundTruthNotes": "Pricing query without invoice command."
+  },
+  {
+    "id": "case_31",
+    "message": "Who is the registered contact person for National Tyre Centre?",
+    "salesRep": "Manoj (Central Hub)",
+    "expectedIntent": "QUESTION",
+    "expectedCustomer": null,
+    "expectedItems": [],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": false,
+    "category": "question",
+    "description": "Customer contact lookup question",
+    "groundTruthNotes": "General question."
+  },
+  {
+    "id": "case_32",
+    "message": "Where is my invoice from yesterday?",
+    "salesRep": "Deepak (Key Accounts)",
+    "expectedIntent": "QUESTION",
+    "expectedCustomer": null,
+    "expectedItems": [],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": false,
+    "category": "question",
+    "description": "Screening task PDF exact example (\"where is my invoice from yesterday?\")",
+    "groundTruthNotes": "Question asking for status, not creating an invoice."
+  },
+  {
+    "id": "case_33",
+    "message": "Good morning everyone! Ready for dispatch today.",
+    "salesRep": "Vikram (Delhi Zone)",
+    "expectedIntent": "GENERAL_CHAT",
+    "expectedCustomer": null,
+    "expectedItems": [],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": false,
+    "category": "chat",
+    "description": "Morning greeting from sales team",
+    "groundTruthNotes": "Polite greeting, zero financial action."
+  },
+  {
+    "id": "case_34",
+    "message": "ok thanks, received the delivery note",
+    "salesRep": "Rajesh (Field Agent 1)",
+    "expectedIntent": "GENERAL_CHAT",
+    "expectedCustomer": null,
+    "expectedItems": [],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": false,
+    "category": "chat",
+    "description": "Screening task PDF exact example (\"ok thanks\")",
+    "groundTruthNotes": "Acknowledgment message."
+  },
+  {
+    "id": "case_35",
+    "message": "Cancel that invoice",
+    "salesRep": "Sunil (Quick Messenger)",
+    "expectedIntent": "GENERAL_CHAT",
+    "expectedCustomer": null,
+    "expectedItems": [],
+    "shouldClarify": false,
+    "expectedClarificationReason": null,
+    "isInvoiceCreationAllowed": false,
+    "category": "chat",
+    "description": "Prompt example \"Cancel that invoice\"",
+    "groundTruthNotes": "Cancellation command handled by approval manager or general response."
+  }
+]

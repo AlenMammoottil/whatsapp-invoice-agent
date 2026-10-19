@@ -51,20 +51,20 @@ export type ClassificationResult = z.infer<typeof ClassificationResultSchema>;
 // ==========================================
 
 export const ExtractedLineItemSchema = z.object({
-  raw_item_name: z.string().min(1, 'Product description is required'),
-  quantity: z.number().positive().default(1),
-  rate: z.number().nonnegative().optional(), // optional if customer didn't specify rate, to be pulled from Zoho
-  unit: z.string().optional(),
+  raw_item_name: z.string().nullish().transform(v => (v && v.trim() ? v.trim() : 'Unknown Item')),
+  quantity: z.number().nullish().transform(v => (v && v > 0 ? v : 1)),
+  rate: z.number().nonnegative().nullish().transform(v => v ?? undefined), // null from LLM → undefined
+  unit: z.string().nullish().transform(v => v ?? undefined),               // null from LLM → undefined
 });
 
 export type ExtractedLineItem = z.infer<typeof ExtractedLineItemSchema>;
 
 export const ExtractedInvoiceRequestSchema = z.object({
-  customer_name: z.string().min(1, 'Customer name is required'),
-  items: z.array(ExtractedLineItemSchema).min(1, 'At least one line item is required'),
-  currency: z.string().default('USD'),
-  notes: z.string().optional(),
-  due_date: z.string().optional(),
+  customer_name: z.string().nullish().transform(v => (v && v.trim() ? v.trim() : 'Unknown Customer')),
+  items: z.array(ExtractedLineItemSchema).nullish().transform(v => v && v.length > 0 ? v : []),
+  currency: z.string().default('USD').nullish().transform(v => v ?? 'USD'),
+  notes: z.string().nullish().transform(v => v ?? undefined),   // LLMs may return null
+  due_date: z.string().nullish().transform(v => v ?? undefined), // LLMs may return null
 });
 
 export type ExtractedInvoiceRequest = z.infer<typeof ExtractedInvoiceRequestSchema>;
@@ -98,12 +98,17 @@ export type ClarificationRequest = z.infer<typeof ClarificationRequestSchema>;
 // 5. Final Invoice Data Structures
 // ==========================================
 
+export const RateSourceSchema = z.enum(['catalog', 'explicit_override']);
+export type RateSource = z.infer<typeof RateSourceSchema>;
+
 export const InvoiceLineItemSchema = z.object({
   item_id: z.string(),
   name: z.string(),
   description: z.string().default(''),
   quantity: z.number().positive(),
   rate: z.number().nonnegative(),
+  catalog_rate: z.number().nonnegative().optional(),
+  rate_source: RateSourceSchema.default('catalog').optional(),
   item_total: z.number().nonnegative(),
 });
 
@@ -117,12 +122,15 @@ export const CreateInvoicePayloadSchema = z.object({
       item_id: z.string(),
       quantity: z.number().positive(),
       rate: z.number().nonnegative().optional(),
+      catalog_rate: z.number().nonnegative().optional(),
+      rate_source: RateSourceSchema.optional(),
       description: z.string().optional(),
     })
   ).min(1),
   notes: z.string().optional(),
   date: z.string().optional(),
   due_date: z.string().optional(),
+  has_price_override: z.boolean().default(false).optional(),
 });
 
 export type CreateInvoicePayload = z.infer<typeof CreateInvoicePayloadSchema>;
@@ -143,6 +151,43 @@ export const InvoiceSchema = z.object({
   status: z.enum(['draft', 'sent', 'paid']),
   pdf_url: z.string(),
   created_at: z.string(),
+  has_price_override: z.boolean().default(false).optional(),
 });
 
 export type Invoice = z.infer<typeof InvoiceSchema>;
+
+// ==========================================
+// 6. Preview & Approval Workflow
+// ==========================================
+
+export const PendingApprovalSchema = z.object({
+  approval_id: z.string(),
+  reference_number: z.string(),
+  group_id: z.string(),
+  sender_jid: z.string(),
+  sender_name: z.string(),
+  payload: CreateInvoicePayloadSchema,
+  summary: z.object({
+    customer_name: z.string(),
+    items: z.array(
+      z.object({
+        name: z.string(),
+        quantity: z.number(),
+        rate: z.number(),
+        catalog_rate: z.number(),
+        rate_source: RateSourceSchema,
+        item_total: z.number(),
+      })
+    ),
+    subtotal: z.number(),
+    tax_total: z.number(),
+    total: z.number(),
+    currency: z.string(),
+    has_price_override: z.boolean(),
+  }),
+  created_at: z.number(),
+  expires_at: z.number(),
+});
+
+export type PendingApproval = z.infer<typeof PendingApprovalSchema>;
+

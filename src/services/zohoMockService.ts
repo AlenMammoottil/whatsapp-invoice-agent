@@ -30,6 +30,113 @@ export class ItemNotFoundError extends Error {
 
 export class ZohoMockService implements IZohoService {
   private customers: Customer[] = [
+    // Real Zoho Books Tyre Org Customers
+    {
+      customer_id: 'cust_tyre_001',
+      company_name: 'ABC Tyres & Traders',
+      contact_name: 'Rajesh Kumar',
+      email: 'rajesh@abctyres.com',
+      phone: '+91-9876543210',
+      aliases: ['abc tyres', 'abc trading', 'abc tyres & traders', 'abc'],
+    },
+    {
+      customer_id: 'cust_tyre_002',
+      company_name: 'ABC Wheels trading',
+      contact_name: 'Amit Shah',
+      email: 'amit@abcwheels.com',
+      phone: '+91-9876543211',
+      aliases: ['abc wheels', 'abc wheels trading'],
+    },
+    {
+      customer_id: 'cust_tyre_003',
+      company_name: 'City Motors & Tyres',
+      contact_name: 'Suresh Patil',
+      email: 'suresh@citymotors.com',
+      phone: '+91-9876543212',
+      aliases: ['city motors', 'city motors & tyres', 'city'],
+    },
+    {
+      customer_id: 'cust_tyre_004',
+      company_name: 'City Wheels & Accessories',
+      contact_name: 'Vikas Verma',
+      email: 'vikas@citywheels.com',
+      phone: '+91-9876543213',
+      aliases: ['city wheels', 'city accessories'],
+    },
+    {
+      customer_id: 'cust_tyre_005',
+      company_name: 'Metro Tyres',
+      contact_name: 'Manoj Tiwari',
+      email: 'manoj@metrotyres.com',
+      phone: '+91-9876543214',
+      aliases: ['metro tyres', 'metro', 'metro auto'],
+    },
+    {
+      customer_id: 'cust_tyre_006',
+      company_name: 'Metro Wheels',
+      contact_name: 'Deepak Chopra',
+      email: 'deepak@metrowheels.com',
+      phone: '+91-9876543215',
+      aliases: ['metro wheels'],
+    },
+    {
+      customer_id: 'cust_tyre_007',
+      company_name: 'National Auto Spares',
+      contact_name: 'Anil Gupta',
+      email: 'anil@nationalauto.com',
+      phone: '+91-9876543216',
+      aliases: ['national auto', 'national auto spares', 'national'],
+    },
+    {
+      customer_id: 'cust_tyre_008',
+      company_name: 'National Tyre Centre',
+      contact_name: 'Karan Malhotra',
+      email: 'karan@nationaltyre.com',
+      phone: '+91-9876543217',
+      aliases: ['national tyre', 'national tyre centre', 'national tyres'],
+    },
+    {
+      customer_id: 'cust_tyre_009',
+      company_name: 'Royal Tyre House',
+      contact_name: 'Harpreet Singh',
+      email: 'harpreet@royaltyre.com',
+      phone: '+91-9876543218',
+      aliases: ['royal tyre', 'royal tyre house', 'royal tyres', 'royal'],
+    },
+    {
+      customer_id: 'cust_tyre_010',
+      company_name: 'Royal Wheel House',
+      contact_name: 'Jaspreet Singh',
+      email: 'jaspreet@royalwheel.com',
+      phone: '+91-9876543219',
+      aliases: ['royal wheel', 'royal wheel house', 'royal wheels'],
+    },
+    // Screening Task PDF Specific Customers
+    {
+      customer_id: 'cust_tyre_011',
+      company_name: 'VK Enterprises',
+      contact_name: 'Vijay Kumar',
+      email: 'vk@vkenterprises.com',
+      phone: '+91-9876543220',
+      aliases: ['vk', 'vk enterprises', 'vk ent'],
+    },
+    {
+      customer_id: 'cust_tyre_012',
+      company_name: 'Sharma Motors',
+      contact_name: 'Ramesh Sharma',
+      email: 'ramesh@sharmamotors.com',
+      phone: '+91-9876543221',
+      aliases: ['sharma motors', 'sharma'],
+    },
+    {
+      customer_id: 'cust_tyre_013',
+      company_name: 'Gupta Auto Spares',
+      contact_name: 'Sunil Gupta',
+      email: 'sunil@guptaauto.com',
+      phone: '+91-9876543222',
+      aliases: ['gupta auto', 'gupta auto spares', 'gupta'],
+    },
+    // Backward-compatible mock customers for legacy test suites
     {
       customer_id: 'cust_001',
       company_name: 'Acme Corporation',
@@ -73,6 +180,113 @@ export class ZohoMockService implements IZohoService {
   ];
 
   private items: ProductItem[] = [
+    // Real Zoho Books Tyre Org Items (with variant sizes & specs)
+    {
+      item_id: 'item_tyre_101',
+      name: 'Car Tyre 13-inch',
+      description: 'Radial tubeless tyre 155/80 R13 for small hatchbacks',
+      rate: 2500.0,
+      unit: 'unit',
+      aliases: ['13 inch car tyre', 'car tyre 13', '13" car tyre', '13 inch tyre', '13" tyre', '13 inch', '13 tyre'],
+    },
+    {
+      item_id: 'item_tyre_102',
+      name: 'Car Tyre 14-inch',
+      description: 'Radial tubeless tyre 175/65 R14 for premium hatchbacks & sedans',
+      rate: 3000.0,
+      unit: 'unit',
+      aliases: ['14 inch car tyre', 'car tyre 14', '14" car tyre', '14 inch tyre', '14" tyre', '14 inch', '14 tyre'],
+    },
+    {
+      item_id: 'item_tyre_103',
+      name: 'Car Tyre 15-inch',
+      description: 'High-performance tyre 185/65 R15 for sedans',
+      rate: 3500.0,
+      unit: 'unit',
+      aliases: ['15 inch car tyre', 'car tyre 15', '15" car tyre', '15 inch tyre', '15" tyre', '15 inch', '15 tyre'],
+    },
+    {
+      item_id: 'item_tyre_104',
+      name: 'Car Tyre 16-inch',
+      description: 'All-season radial tyre 205/55 R16 for luxury sedans',
+      rate: 4000.0,
+      unit: 'unit',
+      aliases: ['16 inch car tyre', 'car tyre 16', '16" car tyre', '16 inch tyre', '16" tyre', '16 inch', '16 tyre'],
+    },
+    {
+      item_id: 'item_tyre_105',
+      name: 'Bike Tyre 17-inch',
+      description: 'Motorcycle rear tubeless tyre 100/90-17',
+      rate: 1200.0,
+      unit: 'unit',
+      aliases: ['17 inch bike tyre', 'bike tyre 17', '17" bike tyre', '17 bike tyre'],
+    },
+    {
+      item_id: 'item_tyre_106',
+      name: 'Bike Tyre 18-inch',
+      description: 'Motorcycle front tubeless tyre 90/90-18',
+      rate: 1500.0,
+      unit: 'unit',
+      aliases: ['18 inch bike tyre', 'bike tyre 18', '18" bike tyre', '18 bike tyre'],
+    },
+    {
+      item_id: 'item_tyre_107',
+      name: 'Scooter Tyre',
+      description: 'City scooter tubeless tyre 90/100-10 53J',
+      rate: 900.0,
+      unit: 'unit',
+      aliases: ['scooter tyre', 'scooter tyres', 'scooter tire', 'scooter tires', 'scooter', '10 inch scooter tyre'],
+    },
+    {
+      item_id: 'item_tyre_108',
+      name: 'SUV Tyre 16-inch',
+      description: 'All-terrain SUV tyre 215/65 R16',
+      rate: 5000.0,
+      unit: 'unit',
+      aliases: ['16 inch suv tyre', 'suv tyre 16', '16" suv tyre', '16 suv tyre'],
+    },
+    {
+      item_id: 'item_tyre_109',
+      name: 'SUV Tyre 17-inch',
+      description: 'All-terrain SUV tyre 235/65 R17',
+      rate: 6000.0,
+      unit: 'unit',
+      aliases: ['17 inch suv tyre', 'suv tyre 17', '17" suv tyre', '17 suv tyre'],
+    },
+    {
+      item_id: 'item_tyre_110',
+      name: 'Truck Tyre',
+      description: 'Commercial radial truck tyre 10.00 R20 16PR',
+      rate: 8000.0,
+      unit: 'unit',
+      aliases: ['truck tyre', 'truck tyres', 'truck tire', 'truck tires', 'heavy duty truck tyre'],
+    },
+    // Screening Task PDF Specific Wheel Items
+    {
+      item_id: 'item_tyre_111',
+      name: 'Alloy Wheel 18" Lenzo - Red',
+      description: 'Lenzo lightweight performance 18-inch alloy wheel in racing red',
+      rate: 5200.0,
+      unit: 'unit',
+      aliases: ['red lenzo alloy 18 inch', '18 alloy red lenzo', 'red lenzo alloy 18', '18 inch lenzo red', '18" lenzo wheel red'],
+    },
+    {
+      item_id: 'item_tyre_112',
+      name: 'Alloy Wheel 17" Lenzo - Red',
+      description: 'Lenzo lightweight performance 17-inch alloy wheel in racing red',
+      rate: 4800.0,
+      unit: 'unit',
+      aliases: ['red lenzo alloy 17 inch', '17 alloy red lenzo', 'red lenzo alloy 17', '17 inch lenzo red', '17" lenzo wheel red'],
+    },
+    {
+      item_id: 'item_tyre_113',
+      name: 'Alloy Wheel 17" Lenzo - Black',
+      description: 'Lenzo matte black 17-inch alloy wheel',
+      rate: 4800.0,
+      unit: 'unit',
+      aliases: ['17" lenzo wheel black', '17 inch lenzo wheel black', 'black lenzo 17', '17 lenzo alloy black'],
+    },
+    // Legacy mock items for backward compatibility
     {
       item_id: 'item_101',
       name: 'Web Development Consultation',
@@ -87,7 +301,7 @@ export class ZohoMockService implements IZohoService {
       description: 'Managed shared cloud hosting - 2 vCPU, 4GB RAM',
       rate: 50.0,
       unit: 'month',
-      aliases: ['hosting', 'cloud hosting', 'standard hosting', 'cloud host', 'shared hosting'],
+      aliases: ['hosting standard', 'standard hosting', 'cloud host standard', 'shared hosting'],
     },
     {
       item_id: 'item_103',
@@ -95,7 +309,7 @@ export class ZohoMockService implements IZohoService {
       description: 'High-performance dedicated cloud hosting - 8 vCPU, 32GB RAM',
       rate: 120.0,
       unit: 'month',
-      aliases: ['hosting', 'cloud hosting', 'premium hosting', 'dedicated hosting', 'cloud host premium'],
+      aliases: ['hosting premium', 'premium hosting', 'dedicated hosting', 'cloud host premium'],
     },
     {
       item_id: 'item_104',
@@ -205,6 +419,8 @@ export class ZohoMockService implements IZohoService {
         description: itemPayload.description || catalogItem.description,
         quantity,
         rate,
+        catalog_rate: catalogItem.rate,
+        rate_source: itemPayload.rate_source || (itemPayload.rate && itemPayload.rate !== catalogItem.rate ? 'explicit_override' : 'catalog'),
         item_total,
       });
 
@@ -238,6 +454,7 @@ export class ZohoMockService implements IZohoService {
       status: 'draft',
       pdf_url: `/api/zoho/invoices/${invoiceId}/pdf`,
       created_at: now.toISOString(),
+      has_price_override: payload.has_price_override || false,
     };
 
     // Store in-memory

@@ -94,14 +94,31 @@ export class ZohoRealService implements IZohoService {
       },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      // Detect duplicate reference number error
-      if (errorText.toLowerCase().includes('already exists') || errorText.toLowerCase().includes('duplicate')) {
-        throw new Error(`Duplicate entry in Zoho Books: ${errorText}`);
-      }
-      throw new Error(`Zoho API error [${response.status}] on ${endpoint}: ${errorText}`);
-    }
+
+if (!response.ok) {
+  const errorText = await response.text();
+
+  console.error('Zoho API diagnostic:', {
+    status: response.status,
+    endpoint,
+    baseUrl: this.baseUrl,
+    organizationIdConfigured: Boolean(this.organizationId),
+    response: errorText,
+  });
+
+  if (
+    errorText.toLowerCase().includes('already exists') ||
+    errorText.toLowerCase().includes('duplicate')
+  ) {
+    throw new Error(`Duplicate entry in Zoho Books: ${errorText}`);
+  }
+
+  throw new Error(
+    `Zoho API error [${response.status}] on ${endpoint}: ${errorText}`
+  );
+}
+
+
 
     return (await response.json()) as T;
   }
@@ -188,6 +205,8 @@ export class ZohoRealService implements IZohoService {
         description: li.description || '',
         quantity: li.quantity,
         rate: li.rate,
+        catalog_rate: li.rate,
+        rate_source: 'catalog',
         item_total: li.item_total,
       }));
 
@@ -207,6 +226,7 @@ export class ZohoRealService implements IZohoService {
         status: inv.status || 'draft',
         pdf_url: `/api/zoho/invoices/${inv.invoice_id}/pdf`,
         created_at: inv.created_time || new Date().toISOString(),
+        has_price_override: false,
       };
     } catch {
       return null;

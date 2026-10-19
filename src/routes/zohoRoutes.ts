@@ -58,8 +58,29 @@ router.post('/invoices', async (req: Request, res: Response) => {
     }
 
     const service = ZohoFactory.getService();
-    const isLive = ZohoFactory.isLiveConfigured();
-    const invoice = await service.createInvoice(parseResult.data);
+const isLive = ZohoFactory.isLiveConfigured();
+
+// Dry run: validate the request without creating an invoice.
+if (req.query['dryRun'] === 'true') {
+  const payload = parseResult.data;
+
+  res.status(200).json({
+    message: 'Dry run successful. No invoice was created.',
+    isDryRun: true,
+    isMock: !isLive,
+    invoiceRequest: {
+      customer_id: payload.customer_id,
+      reference_number: payload.reference_number,
+      date: payload.date,
+      due_date: payload.due_date,
+      line_items: payload.line_items,
+      notes: payload.notes,
+    },
+  });
+  return;
+}
+
+const invoice = await service.createInvoice(parseResult.data);
     res.status(201).json({
       message: isLive ? 'Invoice created in Zoho Books' : 'Mock invoice created successfully (fictional test data)',
       isMock: !isLive,

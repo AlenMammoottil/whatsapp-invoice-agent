@@ -1,12 +1,10 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
-import dotenv from 'dotenv';
 import zohoRoutes from './routes/zohoRoutes.js';
 import llmRoutes from './routes/llmRoutes.js';
 import whatsappRoutes from './routes/whatsappRoutes.js';
 import { whatsappService } from './services/whatsappService.js';
 
-// Load environment variables from .env file
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;

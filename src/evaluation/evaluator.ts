@@ -1,14 +1,16 @@
 import { EVALUATION_DATASET, EvaluationTestCase } from './dataset.js';
 import { AgentService } from '../services/agentService.js';
 import { ZohoMockService } from '../services/zohoMockService.js';
+import { storageService } from '../services/storageService.js';
 
 export interface TestCaseResult {
   testId: string;
   message: string;
+  salesRep: string;
   expectedIntent: string;
   actualIntent: string;
   intentCorrect: boolean;
-  expectedCustomer?: string;
+  expectedCustomer: string | null;
   actualCustomer?: string;
   customerCorrect: boolean;
   productCorrect: boolean;
@@ -31,6 +33,8 @@ export interface EvaluationSummary {
   quantityAccuracy: number; // %
   rateAccuracy: number; // %
   clarificationAccuracy: number; // %
+  clarificationPrecision: number; // %
+  clarificationRecall: number; // %
   confidentlyIncorrectCount: number;
   confidentlyIncorrectRate: number; // %
   avgLatencyMs: number;
@@ -45,6 +49,7 @@ export class Evaluator {
    * Runs the evaluation dataset against a specific LLM provider
    */
   static async evaluateProvider(providerName: string): Promise<EvaluationSummary> {
+    storageService.clear();
     const zohoMock = new ZohoMockService();
     const agent = new AgentService(zohoMock);
     const results: TestCaseResult[] = [];
@@ -60,15 +65,31 @@ export class Evaluator {
     let rateEligible = 0;
     let correctRates = 0;
     let correctClarifications = 0;
+    let trueClarifications = 0;
+    let predictedClarifications = 0;
+    let correctlyPredictedClarifications = 0;
     let confidentlyIncorrectCount = 0;
 
     for (const testCase of EVALUATION_DATASET) {
-      const output = await agent.processIncomingMessage({
-        messageText: testCase.message,
-        messageId: `eval-${testCase.id}-${Date.now()}`,
-        groupId: 'eval-group@g.us',
-        providerName,
-      });
+      let output;
+      try {
+        output = await agent.processIncomingMessage({
+          messageText: testCase.message,
+          messageId: `eval-${testCase.id}-${Date.now()}`,
+          groupId: 'eval-group@g.us',
+          providerName,
+          autoApprove: true, // Auto-approve so fields can be scored if valid
+        });
+      } catch (err: any) {
+        console.warn(`[Eval] Provider ${providerName} threw error on ${testCase.id}:`, err.message);
+        output = {
+          intent: 'GENERAL_CHAT' as const,
+          replyText: `Error: ${err.message}`,
+          clarificationNeeded: false,
+          duplicateDetected: false,
+          latencyMs: 1000,
+        };
+      }
 
       latencies.push(output.latencyMs);
 
@@ -80,6 +101,10 @@ export class Evaluator {
       const clarificationCorrect = output.clarificationNeeded === testCase.shouldClarify;
       if (clarificationCorrect) correctClarifications++;
 
+      if (testCase.shouldClarify) trueClarifications++;
+      if (output.clarificationNeeded) predictedClarifications++;
+      if (testCase.shouldClarify && output.clarificationNeeded) correctlyPredictedClarifications++;
+
       let customerCorrect = true;
       let productCorrect = true;
       let quantityCorrect = true;
@@ -89,14 +114,14 @@ export class Evaluator {
 
       // Check invoice fields if it was an invoice request
       if (testCase.expectedIntent === 'INVOICE_REQUEST') {
-        // Customer check
-        if (testCase.expectedCustomer) {
+        // Customer check (when customer should be resolved)
+        if (testCase.expectedCustomer && !testCase.shouldClarify) {
           customerEligible++;
           const actualCust = output.invoice?.customer_name || '';
           customerCorrect = actualCust.toLowerCase().includes(testCase.expectedCustomer.toLowerCase());
           if (customerCorrect) {
             correctCustomers++;
-          } else if (!output.clarificationNeeded) {
+          } else {
             notesParts.push(`Expected customer "${testCase.expectedCustomer}" but got "${actualCust}"`);
           }
         }
@@ -109,7 +134,6 @@ export class Evaluator {
 
           const actualLineItems = output.invoice?.line_items || [];
 
-          // Compare items
           let matchedItemCount = 0;
           let matchedQuantityCount = 0;
           let matchedRateCount = 0;
@@ -155,7 +179,7 @@ export class Evaluator {
             notesParts.push('⚠️ CONFIDENTLY INCORRECT: Invoice issued with inaccurate fields');
           }
         } else if (testCase.shouldClarify && !output.clarificationNeeded) {
-          // It should have clarified but went ahead and created an invoice
+          // It should have clarified but went ahead and created an invoice or missed ambiguity
           isConfidentlyIncorrect = true;
           confidentlyIncorrectCount++;
           notesParts.push('⚠️ CONFIDENTLY INCORRECT: Failed to ask clarification for ambiguous/missing data');
@@ -165,6 +189,7 @@ export class Evaluator {
       results.push({
         testId: testCase.id,
         message: testCase.message,
+        salesRep: testCase.salesRep,
         expectedIntent: testCase.expectedIntent,
         actualIntent: output.intent,
         intentCorrect,
@@ -191,6 +216,13 @@ export class Evaluator {
     const minLatencyMs = latencies[0] || 0;
     const maxLatencyMs = latencies[latencies.length - 1] || 0;
 
+    const clarificationPrecision = predictedClarifications > 0
+      ? Math.round((correctlyPredictedClarifications / predictedClarifications) * 100)
+      : 100;
+    const clarificationRecall = trueClarifications > 0
+      ? Math.round((correctlyPredictedClarifications / trueClarifications) * 100)
+      : 100;
+
     return {
       providerName,
       totalCases,
@@ -200,6 +232,8 @@ export class Evaluator {
       quantityAccuracy: quantityEligible > 0 ? Math.round((correctQuantities / quantityEligible) * 100) : 100,
       rateAccuracy: rateEligible > 0 ? Math.round((correctRates / rateEligible) * 100) : 100,
       clarificationAccuracy: Math.round((correctClarifications / totalCases) * 100),
+      clarificationPrecision,
+      clarificationRecall,
       confidentlyIncorrectCount,
       confidentlyIncorrectRate: Math.round((confidentlyIncorrectCount / totalCases) * 100),
       avgLatencyMs,

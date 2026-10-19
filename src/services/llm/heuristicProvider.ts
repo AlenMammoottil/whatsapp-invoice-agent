@@ -18,17 +18,25 @@ export class HeuristicProvider implements ILLMProvider {
     const isQuestion = text.includes('?') || questionWords.some((qw) => text.startsWith(qw) || text.includes(` ${qw} `));
 
     // 2. Detect invoice requests
-    const invoiceKeywords = ['invoice', 'bill', 'charge', 'send bill', 'create invoice', 'generate invoice', 'raise invoice', 'draft bill'];
-    const isInvoiceRequest = invoiceKeywords.some((kw) => text.includes(kw));
+    const invoiceKeywords = [
+      'invoice', 'bill', 'charge', 'send bill', 'create invoice', 'generate invoice',
+      'raise invoice', 'raise inv', 'draft bill', 'needs', 'make an invoice', 'prepare bill'
+    ];
+
+    // Detect format patterns like "VK\nred lenzo alloy..." or "Sharma motors - 17 inch..."
+    const isStructuredRequest = /^[A-Za-z0-9\s&]{2,30}\s*[-:]\s*\d+/i.test(text) ||
+                                /^[A-Za-z0-9\s&]{2,20}\n[a-z0-9\s"']+/i.test(text);
+
+    const isInvoiceRequest = invoiceKeywords.some((kw) => text.includes(kw)) || isStructuredRequest;
 
     let intent: 'INVOICE_REQUEST' | 'QUESTION' | 'GENERAL_CHAT' = 'GENERAL_CHAT';
     let confidence = 0.85;
     let reasoning = 'Classified based on conversation keywords';
 
-    if (isInvoiceRequest && !text.startsWith('how to') && !text.startsWith('what is')) {
+    if (isInvoiceRequest && !text.startsWith('how to') && !text.startsWith('what is') && !text.startsWith('where is') && !text.startsWith('who is')) {
       intent = 'INVOICE_REQUEST';
       confidence = 0.95;
-      reasoning = 'Message contains explicit invoice creation action verbs';
+      reasoning = 'Message contains explicit invoice creation action verbs or structured order lines';
     } else if (isQuestion) {
       intent = 'QUESTION';
       confidence = 0.9;
@@ -57,87 +65,131 @@ export class HeuristicProvider implements ILLMProvider {
   async extractInvoice(message: string): Promise<ExtractionResponse> {
     const startTime = Date.now();
     const text = message.trim();
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
-    // 1. Extract Customer Name
-    // Look for patterns like "for Acme", "bill TechNova", "invoice to GreenLeaf", "to: Charlie Brown"
     let customerName = 'Unknown Customer';
-    const customerPatterns = [
-      /(?:invoice|bill|charge)\s+(?:to\s+|for\s+)?([A-Za-z0-9\s&]+?)(?:\s+for|\s*:\s*|\s+with|\s*,\s*|\s+due|\s+amount|\s+dated|$)/i,
-      /(?:customer|client)\s*[:=]\s*([A-Za-z0-9\s&]+?)(?:,|\n|$)/i,
-      /(?:for)\s+([A-Za-z0-9\s&]+?)(?:\s+for|\s*:\s*|\s+with|\s*,\s*|$)/i,
-    ];
+    let contentToParse = text;
 
-    for (const pattern of customerPatterns) {
-      const match = text.match(pattern);
-      if (match && match[1] && match[1].trim().length > 1) {
-        // Clean customer string from trailing action words
-        const cleaned = match[1]
-          .replace(/^(to|the|a)\s+/i, '')
-          .replace(/\s+(please|kindly|generate|create)$/i, '')
-          .trim();
-        if (cleaned.length > 1) {
-          customerName = cleaned;
-          break;
+    // Pattern A: Multiline format where first line is just the customer (e.g. "VK\nred lenzo alloy...")
+    if (lines.length >= 2 && lines[0].length <= 35 && !/^(please|invoice|bill|charge|send|create|need)/i.test(lines[0])) {
+      customerName = lines[0];
+      contentToParse = lines.slice(1).join('\n');
+    }
+    // Pattern B: Dash separator format (e.g. "Sharma motors - 17\" Lenzo wheel black, 2 pcs @ 4800")
+    else if (/^[A-Za-z0-9\s&]{2,35}\s*-\s*.+$/i.test(text) && !/^(please|invoice|bill|charge)/i.test(text)) {
+      const parts = text.split(/\s*-\s*/);
+      customerName = parts[0].trim();
+      contentToParse = parts.slice(1).join(' - ');
+    }
+    // Pattern C: Natural language clauses
+    else {
+      const customerPatterns = [
+        /(?:raise\s+inv\s+for|raise\s+invoice\s+for|make\s+an\s+invoice\s+for|prepare\s+bill\s+for)\s+([A-Za-z0-9\s&]+?)(?:\s*,\s*|\s+for|\s*\n|$)/i,
+        /(?:invoice|bill|charge)\s+(?:to\s+|for\s+)?([A-Za-z0-9\s&]+?)(?:\s+for|\s*:\s*|\s+with|\s*,\s*|\s+due|\s+amount|\s+dated|\s*\n|$)/i,
+        /([A-Za-z0-9\s&]{2,30})\s+(?:needs|requires)\s+/i,
+        /(?:for)\s+([A-Za-z0-9\s&]+?)(?:\s+for|\s*:\s*|\s+with|\s*,\s*|$)/i,
+      ];
+
+      for (const pattern of customerPatterns) {
+        const match = text.match(pattern);
+        if (match && match[1] && match[1].trim().length > 1) {
+          const cleaned = match[1]
+            .replace(/^(to|the|a)\s+/i, '')
+            .replace(/\s+(please|kindly|generate|create)$/i, '')
+            .trim();
+          if (cleaned.length > 1) {
+            customerName = cleaned;
+            break;
+          }
         }
       }
     }
 
-    // 2. Strip greetings, action verbs, and customer clause so we can cleanly parse line items
-    let itemText = text;
+    // Clean customer string
+    customerName = customerName.replace(/^(please|kindly)\s+/i, '').trim();
+
+    // 2. Prepare remaining text for item extraction
+    let itemText = contentToParse;
     itemText = itemText.replace(/^(?:hi|hey|hello|good\s+morning|good\s+afternoon|good\s+evening|please|kindly)\b\s*,?\s*/i, '');
-    itemText = itemText.replace(/^(?:create|generate|raise|send|draft|bill|invoice|charge)\s+(?:an?\s+)?(?:invoice|bill)?\s*(?:to|for)?\s*/i, '');
+    itemText = itemText.replace(/^(?:create|generate|raise|send|draft|bill|invoice|charge|prepare)\s+(?:an?\s+)?(?:invoice|inv|bill)?\s*(?:to|for)?\s*/i, '');
+
     if (customerName !== 'Unknown Customer') {
       const custEscaped = customerName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       itemText = itemText.replace(new RegExp(`^(?:to|for)?\\s*${custEscaped}\\s*(?:for|:|with|,)?\\s*`, 'i'), '');
-      itemText = itemText.replace(new RegExp(`(?:for|to)?\\s*${custEscaped}\\s*(?:for|:|with|,)?`, 'gi'), ' ');
+      itemText = itemText.replace(new RegExp(`(?:for|to)\\s+${custEscaped}\\b`, 'gi'), ' ');
     }
     itemText = itemText.replace(/^(?:for|with|of)\s+/i, '').trim();
 
-    // 3. Extract Line Items
-    // Look for items with quantity and optional rate
-    // e.g. "2 hours of web dev", "1 cloud hosting", "3 chairs @ $250", "AMC maintenance"
-    const items: ExtractedLineItem[] = [];
+    // 3. Extract Global Rate if written as "rate 5200" or "@ 5200"
+    let globalRate: number | undefined;
+    const rateMatch = itemText.match(/\b(?:rate|price|@)\s*[:=]?\s*(?:rs\.?|inr|\$)?\s*(\d+(?:\.\d+)?)/i);
+    if (rateMatch && rateMatch[1]) {
+      globalRate = parseFloat(rateMatch[1]);
+      itemText = itemText.replace(/\b(?:rate|price|@)\s*[:=]?\s*(?:rs\.?|inr|\$)?\s*(\d+(?:\.\d+)?)/gi, '');
+    }
 
-    // Split items by commas, "and", or newlines
+    // Convert word numbers to digits
+    const wordNumbers: Record<string, string> = {
+      one: '1', two: '2', three: '3', four: '4', five: '5',
+      six: '6', seven: '7', eight: '8', nine: '9', ten: '10'
+    };
+    for (const [w, n] of Object.entries(wordNumbers)) {
+      itemText = itemText.replace(new RegExp(`\\b${w}\\b`, 'gi'), n);
+    }
+
+    // 4. Extract Line Items
+    const items: ExtractedLineItem[] = [];
     const segments = itemText
       .split(/,|\band\b|\n/i)
       .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+      .filter((s) => s.length > 0 && !s.toLowerCase().includes('rate same as last time'));
 
     for (const segment of segments) {
-      // Regex to match:
-      // Group 1: Optional quantity (e.g. "3", "2", "1.5") with optional unit prefix ("hours of", "x", etc.)
-      // Group 2: Product/service description (e.g. "chairs", "web dev", "cloud hosting")
-      // Group 3: Optional rate (e.g. "@ 250", "at 150", "$50")
-      const itemMatch = segment.match(/^(?:(\d+(?:\.\d+)?)\s*(?:x\s+|hours?\s+of\s+|hrs?\s+of\s+|units?\s+of\s+|pcs?\s+of\s+|of\s+)?)?(.+?)(?:\s*(?:@|at|\$)\s*(\d+(?:\.\d+)?))?$/i);
+      // Formats:
+      // "red lenzo alloy 18 inch x 4" -> item: "red lenzo alloy 18 inch", qty: 4
+      // "4 units of Car Tyre 14-inch" -> item: "Car Tyre 14-inch", qty: 4
+      // "8 nos 18 alloy red lenzo"    -> item: "18 alloy red lenzo", qty: 8
+      // "2 pcs @ 4800"
+      let qty = 1;
+      let rawName = segment;
+      let lineRate = globalRate;
 
-      if (itemMatch && itemMatch[2]) {
-        let rawName = itemMatch[2]
-          .replace(/^(please|kindly|also|bill|for)\s+/i, '')
-          .replace(/(?:for|to)\s+[A-Za-z0-9\s&]+$/i, '')
-          .trim();
-
-        // If the item name is empty or matches the customer name, skip
-        if (rawName.toLowerCase() === customerName.toLowerCase() || rawName.length < 2) {
-          continue;
+      // Extract trailing "x 4" or "x4"
+      const trailingQty = rawName.match(/\s+x\s*(\d+(?:\.\d+)?)\s*$/i);
+      if (trailingQty) {
+        qty = parseFloat(trailingQty[1]);
+        rawName = rawName.replace(/\s+x\s*(\d+(?:\.\d+)?)\s*$/i, '').trim();
+      } else {
+        // Extract leading quantity: "4 units of...", "8 nos...", "3 chairs..."
+        const leadingQty = rawName.match(/^(\d+(?:\.\d+)?)\s*(?:x\s+|hours?\s+of\s+|hrs?\s+of\s+|units?\s+of\s+|pcs?\s+of\s+|nos?\s+of\s+|nos?\s+|pcs?\s+|of\s+)?(.+)$/i);
+        if (leadingQty && leadingQty[1] && leadingQty[2]) {
+          qty = parseFloat(leadingQty[1]);
+          rawName = leadingQty[2].trim();
         }
-
-        const quantity = itemMatch[1] ? parseFloat(itemMatch[1]) : 1;
-        const rate = itemMatch[3] ? parseFloat(itemMatch[3]) : undefined;
-
-        items.push({
-          raw_item_name: rawName,
-          quantity: quantity > 0 ? quantity : 1,
-          rate
-        });
       }
-    }
 
-    // Fallback: If no items found, use fallback from text
-    if (items.length === 0) {
+      // Check inline rate: "@ 4800" or "at 250"
+      const inlineRate = rawName.match(/\s*(?:@|at|\$)\s*(\d+(?:\.\d+)?)\s*$/i);
+      if (inlineRate && inlineRate[1]) {
+        lineRate = parseFloat(inlineRate[1]);
+        rawName = rawName.replace(/\s*(?:@|at|\$)\s*(\d+(?:\.\d+)?)\s*$/i, '').trim();
+      }
+
+      // Clean rawName from leftover words
+      rawName = rawName
+        .replace(/^(please|kindly|also|bill|for)\s+/i, '')
+        .replace(/(?:for|to)\s+[A-Za-z0-9\s&]+$/i, '')
+        .trim();
+
+      if (rawName.toLowerCase() === customerName.toLowerCase() || rawName.length < 2) {
+        continue;
+      }
+
       items.push({
-        raw_item_name: 'General Consultation / Services',
-        quantity: 1
+        raw_item_name: rawName,
+        quantity: qty > 0 ? qty : 1,
+        rate: lineRate,
+        unit: undefined
       });
     }
 
@@ -145,7 +197,7 @@ export class HeuristicProvider implements ILLMProvider {
     const validatedResult = ExtractedInvoiceRequestSchema.parse({
       customer_name: customerName,
       items,
-      currency: 'USD',
+      currency: 'INR',
       notes: `Extracted via heuristic parser from: "${text}"`
     });
 

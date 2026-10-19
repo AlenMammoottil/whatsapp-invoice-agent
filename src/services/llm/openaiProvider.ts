@@ -23,37 +23,57 @@ export class OpenAIProvider implements ILLMProvider {
     }
 
     const startTime = Date.now();
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: this.model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-        response_format: { type: 'json_object' },
-        temperature: 0.1, // low temperature for deterministic, consistent extraction
-      }),
-    });
+    const maxRetries = 5;
 
-    const latencyMs = Date.now() - startTime;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.1, // low temperature for deterministic, consistent extraction
+        }),
+      });
 
-    if (!response.ok) {
+      if (response.ok) {
+        const latencyMs = Date.now() - startTime;
+        const data: any = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) {
+          throw new Error('Received empty response from OpenAI');
+        }
+        return { text: content, latencyMs };
+      }
+
+      // Retry on 429 (rate limit) or 503 (service unavailable)
+      if ((response.status === 429 || response.status === 503) && attempt < maxRetries) {
+        const errorText = await response.text();
+        // Parse "try again in X ms/s" if provided by Groq
+        const delayMatch = errorText.match(/try again in ([\d\.]+)(m?s)/i);
+        let waitMs = Math.pow(2, attempt) * 1500;
+        if (delayMatch) {
+          const val = parseFloat(delayMatch[1]);
+          const unit = delayMatch[2].toLowerCase();
+          waitMs = Math.ceil(unit === 'ms' ? val : val * 1000) + 500; // add 500ms safety buffer
+        }
+        console.warn(`  ⚠️  Groq/OpenAI ${response.status} on attempt ${attempt}/${maxRetries} — retrying in ${(waitMs / 1000).toFixed(1)}s...`);
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
       const errorText = await response.text();
       throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
     }
 
-    const data: any = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) {
-      throw new Error('Received empty response from OpenAI');
-    }
-
-    return { text: content, latencyMs };
+    throw new Error('OpenAI/Groq: max retries exceeded');
   }
 
   async classifyIntent(message: string): Promise<ClassificationResponse> {

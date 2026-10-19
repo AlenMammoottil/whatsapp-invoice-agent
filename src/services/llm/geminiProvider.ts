@@ -22,43 +22,41 @@ export class GeminiProvider implements ILLMProvider {
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.model}:generateContent?key=${this.apiKey}`;
     const startTime = Date.now();
+    const maxRetries = 4;
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: `${systemPrompt}\n\nTask:\n${userMessage}` },
-            ],
-          },
-        ],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-        },
-      }),
-    });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nTask:\n${userMessage}` }] }],
+          generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
+        }),
+      });
 
-    const latencyMs = Date.now() - startTime;
+      if (response.ok) {
+        const latencyMs = Date.now() - startTime;
+        const data: any = await response.json();
+        const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!content) throw new Error('Received empty response from Gemini');
+        return { text: content, latencyMs };
+      }
 
-    if (!response.ok) {
+      // Retry on 503 (overloaded) or 429 (rate limit)
+      if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
+        const waitMs = Math.pow(2, attempt) * 1500; // 3s, 6s, 12s
+        console.warn(`  ⚠️  Gemini ${response.status} on attempt ${attempt}/${maxRetries} — retrying in ${waitMs / 1000}s...`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+
       const errorText = await response.text();
       throw new Error(`Gemini API error (${response.status}): ${errorText}`);
     }
 
-    const data: any = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!content) {
-      throw new Error('Received empty response from Gemini');
-    }
-
-    return { text: content, latencyMs };
+    throw new Error('Gemini: max retries exceeded');
   }
+
 
   async classifyIntent(message: string): Promise<ClassificationResponse> {
     const { text, latencyMs } = await this.callGenerateContent(
