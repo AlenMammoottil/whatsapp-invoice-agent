@@ -150,21 +150,45 @@ export class HeuristicProvider implements ILLMProvider {
       // "4 units of Car Tyre 14-inch" -> item: "Car Tyre 14-inch", qty: 4
       // "8 nos 18 alloy red lenzo"    -> item: "18 alloy red lenzo", qty: 8
       // "2 pcs @ 4800"
-      let qty = 1;
+      // "Car Tyre 13-inch"            -> qty: null (not specified)
+      let qty: number | null = null;
       let rawName = segment;
       let lineRate = globalRate;
 
       // Extract trailing "x 4" or "x4"
       const trailingQty = rawName.match(/\s+x\s*(\d+(?:\.\d+)?)\s*$/i);
       if (trailingQty) {
-        qty = parseFloat(trailingQty[1]);
+        qty = parseFloat(trailingQty[1]!);
         rawName = rawName.replace(/\s+x\s*(\d+(?:\.\d+)?)\s*$/i, '').trim();
       } else {
         // Extract leading quantity: "4 units of...", "8 nos...", "3 chairs..."
-        const leadingQty = rawName.match(/^(\d+(?:\.\d+)?)\s*(?:x\s+|hours?\s+of\s+|hrs?\s+of\s+|units?\s+of\s+|pcs?\s+of\s+|nos?\s+of\s+|nos?\s+|pcs?\s+|of\s+)?(.+)$/i);
+        // BUT: only treat a leading number as a quantity if it is followed by a unit
+        // word OR followed by a non-size item name. A bare leading number before a
+        // size-bearing product name (e.g. "10" before "Car Tyre 13-inch") is ambiguous.
+        const leadingQty = rawName.match(/^(\d+(?:\.\d+)?)\s*(?:x\s+|hours?\s+of\s+|hrs?\s+of\s+|units?\s+of\s+|pcs?\s+of\s+|nos?\s+of\s+|nos?\s+|pcs?\s+|of\s+)(.+)$/i);
         if (leadingQty && leadingQty[1] && leadingQty[2]) {
           qty = parseFloat(leadingQty[1]);
           rawName = leadingQty[2].trim();
+        } else {
+          // Check for a plain leading number followed by a product name (e.g. "2 Car Tyre 14-inch")
+          // but NOT if the remaining text starts with a size pattern (the number IS the size)
+          const plainLeading = rawName.match(/^(\d+(?:\.\d+)?)\s+(.{3,})$/);
+          if (plainLeading && plainLeading[1] && plainLeading[2]) {
+            const potentialQty = parseFloat(plainLeading[1]);
+            const remainingText = plainLeading[2].trim();
+            // Do not extract as qty if remaining text already contains the same-or-different size spec
+            // (to avoid "13 inch Car Tyre" being parsed as qty=13)
+            const remainingHasSize = /\b\d{2}\s*(?:inch|in|"|')\b/i.test(remainingText);
+            if (!remainingHasSize && potentialQty > 0 && potentialQty <= 100) {
+              qty = potentialQty;
+              rawName = remainingText;
+            }
+            // Otherwise qty stays null — will trigger clarification
+          }
+          // Trailing bare number: "Car Tyre 13-inch 10"
+          // The number is highly ambiguous — could be quantity OR size.
+          // Keep qty = null to force clarification.
+          // (The extractSizeSpec on the item name later handles size detection.)
         }
       }
 
@@ -173,6 +197,13 @@ export class HeuristicProvider implements ILLMProvider {
       if (inlineRate && inlineRate[1]) {
         lineRate = parseFloat(inlineRate[1]);
         rawName = rawName.replace(/\s*(?:@|at|\$)\s*(\d+(?:\.\d+)?)\s*$/i, '').trim();
+      }
+
+      // Check for explicit INR rate: "₹ 4800" or "rs 4800" or "rs. 4800"
+      const inrRate = rawName.match(/\s*(?:₹|rs\.?\s*)\s*(\d+(?:\.\d+)?)\s*$/i);
+      if (inrRate && inrRate[1]) {
+        lineRate = parseFloat(inrRate[1]);
+        rawName = rawName.replace(/\s*(?:₹|rs\.?\s*)\s*(\d+(?:\.\d+)?)\s*$/i, '').trim();
       }
 
       // Clean rawName from leftover words
@@ -187,7 +218,7 @@ export class HeuristicProvider implements ILLMProvider {
 
       items.push({
         raw_item_name: rawName,
-        quantity: qty > 0 ? qty : 1,
+        quantity: qty,       // null means "not specified" — will trigger clarification
         rate: lineRate,
         unit: undefined
       });

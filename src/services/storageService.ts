@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import { Invoice, PendingApproval } from '../types/schemas.js';
+import { Invoice, PendingApproval, PendingClarification } from '../types/schemas.js';
 
 export interface PersistedState {
-  referenceIndex: Record<string, string>; // reference_number -> invoice_id
-  invoices: Record<string, Invoice>;       // invoice_id -> Invoice
+  referenceIndex: Record<string, string>;   // reference_number -> invoice_id
+  invoices: Record<string, Invoice>;        // invoice_id -> Invoice
   pendingApprovals: Record<string, PendingApproval>; // approval_id -> PendingApproval
+  pendingClarifications: Record<string, PendingClarification>; // clarification_id -> PendingClarification
   processedMessageIds: string[];
 }
 
@@ -26,6 +27,22 @@ export class StorageService {
     return this.instance;
   }
 
+  /**
+   * Create a fresh in-memory-only instance for testing — does not touch disk.
+   */
+  static createForTest(): StorageService {
+    const svc = Object.create(StorageService.prototype) as StorageService;
+    (svc as any).filePath = ':memory:';
+    (svc as any).state = {
+      referenceIndex: {},
+      invoices: {},
+      pendingApprovals: {},
+      pendingClarifications: {},
+      processedMessageIds: [],
+    } as PersistedState;
+    return svc;
+  }
+
   private loadState(): PersistedState {
     try {
       if (fs.existsSync(this.filePath)) {
@@ -35,6 +52,7 @@ export class StorageService {
           referenceIndex: parsed.referenceIndex || {},
           invoices: parsed.invoices || {},
           pendingApprovals: parsed.pendingApprovals || {},
+          pendingClarifications: parsed.pendingClarifications || {},
           processedMessageIds: parsed.processedMessageIds || [],
         };
       }
@@ -46,11 +64,13 @@ export class StorageService {
       referenceIndex: {},
       invoices: {},
       pendingApprovals: {},
+      pendingClarifications: {},
       processedMessageIds: [],
     };
   }
 
   private saveState(): void {
+    if (this.filePath === ':memory:') return; // test instance — skip disk I/O
     try {
       const dir = path.dirname(this.filePath);
       if (!fs.existsSync(dir)) {
@@ -173,6 +193,50 @@ export class StorageService {
     }
   }
 
+  // --- Pending Clarification Operations ---
+
+  savePendingClarification(clarification: PendingClarification): void {
+    this.state.pendingClarifications[clarification.clarification_id] = clarification;
+    this.saveState();
+  }
+
+  /**
+   * Find the most recent non-expired clarification for a specific sender in a group.
+   * Ownership policy: clarification is scoped to (group_id, sender_jid) pair.
+   * An unrelated sender cannot resolve another person's clarification.
+   */
+  findPendingClarificationForSender(groupId: string, senderJid: string): PendingClarification | null {
+    this.cleanExpiredClarifications();
+
+    const all = Object.values(this.state.pendingClarifications);
+    const matches = all
+      .filter((c) => c.group_id === groupId && c.sender_jid === senderJid)
+      .sort((a, b) => b.created_at - a.created_at);
+
+    return matches.length > 0 ? matches[0]! : null;
+  }
+
+  removePendingClarification(clarificationId: string): void {
+    if (this.state.pendingClarifications[clarificationId]) {
+      delete this.state.pendingClarifications[clarificationId];
+      this.saveState();
+    }
+  }
+
+  private cleanExpiredClarifications(): void {
+    const now = Date.now();
+    let changed = false;
+    for (const [id, c] of Object.entries(this.state.pendingClarifications)) {
+      if (now > c.expires_at) {
+        delete this.state.pendingClarifications[id];
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.saveState();
+    }
+  }
+
   /**
    * Resets all storage (useful for isolated unit tests)
    */
@@ -181,6 +245,7 @@ export class StorageService {
       referenceIndex: {},
       invoices: {},
       pendingApprovals: {},
+      pendingClarifications: {},
       processedMessageIds: [],
     };
     this.saveState();

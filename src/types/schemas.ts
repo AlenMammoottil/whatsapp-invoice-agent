@@ -52,7 +52,10 @@ export type ClassificationResult = z.infer<typeof ClassificationResultSchema>;
 
 export const ExtractedLineItemSchema = z.object({
   raw_item_name: z.string().nullish().transform(v => (v && v.trim() ? v.trim() : 'Unknown Item')),
-  quantity: z.number().nullish().transform(v => (v && v > 0 ? v : 1)),
+  // BUG FIX: quantity MUST NOT default to 1 when the LLM returns null/undefined.
+  // A null quantity means "not specified" — the agent must ask for clarification.
+  // The transform preserves null/undefined so downstream validation can detect the absence.
+  quantity: z.number().nullish().transform(v => (v && v > 0 ? v : null)),
   rate: z.number().nonnegative().nullish().transform(v => v ?? undefined), // null from LLM → undefined
   unit: z.string().nullish().transform(v => v ?? undefined),               // null from LLM → undefined
 });
@@ -62,9 +65,11 @@ export type ExtractedLineItem = z.infer<typeof ExtractedLineItemSchema>;
 export const ExtractedInvoiceRequestSchema = z.object({
   customer_name: z.string().nullish().transform(v => (v && v.trim() ? v.trim() : 'Unknown Customer')),
   items: z.array(ExtractedLineItemSchema).nullish().transform(v => v && v.length > 0 ? v : []),
-  currency: z.string().default('USD').nullish().transform(v => v ?? 'USD'),
-  notes: z.string().nullish().transform(v => v ?? undefined),   // LLMs may return null
-  due_date: z.string().nullish().transform(v => v ?? undefined), // LLMs may return null
+  // BUG FIX: do not default currency to USD — use INR from context; keep null so the
+  // app can defer to Zoho organisation currency.
+  currency: z.string().nullish().transform(v => v ?? null),
+  notes: z.string().nullish().transform(v => v ?? undefined),
+  due_date: z.string().nullish().transform(v => v ?? undefined),
 });
 
 export type ExtractedInvoiceRequest = z.infer<typeof ExtractedInvoiceRequestSchema>;
@@ -191,3 +196,61 @@ export const PendingApprovalSchema = z.object({
 
 export type PendingApproval = z.infer<typeof PendingApprovalSchema>;
 
+// ==========================================
+// 7. Pending Clarification State
+//    Stores an in-progress invoice request that
+//    needs a follow-up answer from the user.
+// ==========================================
+
+export type ClarificationKind =
+  | 'AMBIGUOUS_ITEM'
+  | 'MISSING_ITEM'
+  | 'AMBIGUOUS_CUSTOMER'
+  | 'MISSING_CUSTOMER'
+  | 'MISSING_QUANTITY';
+
+export interface PendingClarification {
+  /** Unique ID for this clarification session */
+  clarification_id: string;
+  /** WhatsApp group (or 'direct') the original message arrived in */
+  group_id: string;
+  /** JID of the user who sent the original request */
+  sender_jid: string;
+  /** Stable reference number derived from original message — preserved through all clarification rounds */
+  original_reference_number: string;
+  /** Type of clarification being asked */
+  kind: ClarificationKind;
+  /**
+   * Ordered list of option strings exactly as shown to the user.
+   * Numeric replies (1, 2, 3…) resolve against this list.
+   */
+  options: string[];
+  /**
+   * If kind is AMBIGUOUS_ITEM or MISSING_ITEM, index of the item
+   * within extracted.items that triggered the clarification.
+   */
+  item_index?: number;
+  /**
+   * The full extraction result from the original message.
+   * Preserved so that once clarified, processing can resume from here.
+   */
+  partialExtraction: {
+    customer_name: string;
+    /** Resolved customer_id if customer was already matched */
+    resolved_customer_id?: string;
+    items: Array<{
+      raw_item_name: string;
+      quantity: number | null;
+      rate?: number;
+      /** Resolved Zoho item_id if this item was already matched */
+      resolved_item_id?: string;
+      resolved_item_name?: string;
+      resolved_rate?: number;
+    }>;
+    notes?: string;
+  };
+  /** Epoch ms when this clarification was created */
+  created_at: number;
+  /** Epoch ms after which the clarification expires (default 10 min) */
+  expires_at: number;
+}

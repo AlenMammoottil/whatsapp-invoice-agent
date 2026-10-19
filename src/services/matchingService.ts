@@ -290,7 +290,7 @@ export class MatchingService {
         }
       }
 
-      const options = exactMatches.map((i) => `${i.name} ($${i.rate.toFixed(2)}/${i.unit})`);
+      const options = exactMatches.map((i) => `${i.name} (₹${i.rate.toFixed(2)}/${i.unit})`);
       return {
         clarification: {
           needs_clarification: true,
@@ -330,7 +330,7 @@ export class MatchingService {
       }
 
       if (refined.length > 1) {
-        const options = refined.map((i) => `${i.name} ($${i.rate.toFixed(2)}/${i.unit})`);
+        const options = refined.map((i) => `${i.name} (₹${i.rate.toFixed(2)}/${i.unit})`);
         return {
           clarification: {
             needs_clarification: true,
@@ -358,7 +358,7 @@ export class MatchingService {
       }
 
       // Check if candidates differ by size or tier
-      const options = candidates.map((i) => `${i.name} ($${i.rate.toFixed(2)}/${i.unit})`);
+      const options = candidates.map((i) => `${i.name} (₹${i.rate.toFixed(2)}/${i.unit})`);
       return {
         clarification: {
           needs_clarification: true,
@@ -385,7 +385,7 @@ export class MatchingService {
 
         if (sisterVariants.length > 0) {
           const allVariants = [cand, ...sisterVariants];
-          const options = allVariants.map((i) => `${i.name} ($${i.rate.toFixed(2)}/${i.unit})`);
+          const options = allVariants.map((i) => `${i.name} (₹${i.rate.toFixed(2)}/${i.unit})`);
           return {
             clarification: {
               needs_clarification: true,
@@ -420,7 +420,7 @@ export class MatchingService {
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, 4)
-      .map((r) => `${r.item.name} ($${r.item.rate.toFixed(2)})`);
+      .map((r) => `${r.item.name} (₹${r.item.rate.toFixed(2)})`);
 
     return {
       clarification: {
@@ -475,14 +475,16 @@ export class MatchingService {
     for (const line of extracted.items) {
       const rawName = line.raw_item_name?.trim();
 
-      // Check quantity: Must be a positive number
-      if (!line.quantity || line.quantity <= 0) {
+      // Check quantity: Must be explicitly provided (not null/undefined).
+      // The schema transform returns null when the LLM did not specify a quantity.
+      // We must never silently default to 1 — ask the user instead.
+      if (line.quantity === null || line.quantity === undefined || (line.quantity as number) <= 0) {
         return {
           needsClarification: true,
           clarification: {
             needs_clarification: true,
             reason: 'MISSING_QUANTITY',
-            question: `How many units of "${rawName || 'item'}" should I invoice for ${matchedCustomer.company_name}?`,
+            question: `How many units of "${rawName || 'item'}" should I invoice for ${matchedCustomer.company_name}?\nPlease reply with a number (e.g. "2" or "5 units").`,
             context: { item: rawName },
           },
           hasPriceOverride: false,

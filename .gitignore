@@ -24,3 +24,7 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Local agent runtime state
+data/agent_state.json
+data/agent_state.backup.json
