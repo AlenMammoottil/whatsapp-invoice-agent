@@ -1,0 +1,67 @@
+[
+  {
+    "tenantId": "tyre_shop_mumbai",
+    "businessName": "Mumbai Tyre House",
+    "authorizedGroupIds": [
+      "1234567890-123456@g.us"
+    ],
+    "zoho": {
+      "clientId": "ZOHO_CLIENT_ID_FOR_MUMBAI",
+      "clientSecret": "ZOHO_CLIENT_SECRET_FOR_MUMBAI",
+      "refreshToken": "ZOHO_REFRESH_TOKEN_FOR_MUMBAI",
+      "organizationId": "ZOHO_ORG_ID_FOR_MUMBAI",
+      "baseUrl": "https://www.zohoapis.com/books/v3",
+      "accountsUrl": "https://accounts.zoho.com"
+    },
+    "invoiceSettings": {
+      "currency": "INR",
+      "paymentTermsDays": 30,
+      "requireConfirmation": true,
+      "priceOverrideAllowed": true
+    },
+    "enabled": true
+  },
+  {
+    "tenantId": "auto_spares_delhi",
+    "businessName": "Delhi Auto Spares Ltd",
+    "authorizedGroupIds": [
+      "9876543210-654321@g.us",
+      "9876543210-654322@g.us"
+    ],
+    "zoho": {
+      "clientId": "ZOHO_CLIENT_ID_FOR_DELHI",
+      "clientSecret": "ZOHO_CLIENT_SECRET_FOR_DELHI",
+      "refreshToken": "ZOHO_REFRESH_TOKEN_FOR_DELHI",
+      "organizationId": "ZOHO_ORG_ID_FOR_DELHI",
+      "baseUrl": "https://www.zohoapis.com/books/v3",
+      "accountsUrl": "https://accounts.zoho.com"
+    },
+    "invoiceSettings": {
+      "currency": "INR",
+      "paymentTermsDays": 15,
+      "requireConfirmation": true,
+      "priceOverrideAllowed": false
+    },
+    "enabled": true
+  },
+  {
+    "tenantId": "sandbox_client_test",
+    "businessName": "Sandbox Client Test (Mock Mode)",
+    "mock": true,
+    "mode": "mock",
+    "authorizedGroupIds": [
+      "120363999999999999@g.us"
+    ],
+    "zoho": {
+      "mock": true,
+      "organizationId": "mock_sandbox_org"
+    },
+    "invoiceSettings": {
+      "currency": "INR",
+      "paymentTermsDays": 30,
+      "requireConfirmation": true,
+      "priceOverrideAllowed": true
+    },
+    "enabled": true
+  }
+]

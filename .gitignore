@@ -9,6 +9,11 @@ dist/
 .env.*
 !.env.example
 
+# Multi-tenant configuration (contains Zoho OAuth secrets — NEVER commit)
+tenants.json
+tenants.*.json
+!tenants.example.json
+
 # WhatsApp authentication state / session files
 baileys_auth/
 baileys_auth_info/
@@ -25,6 +30,8 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Local agent runtime state
+# Local agent runtime state (per-tenant and legacy)
 data/agent_state.json
 data/agent_state.backup.json
+data/*/agent_state.json
+data/*/agent_state.backup.json

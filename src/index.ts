@@ -4,6 +4,7 @@ import zohoRoutes from './routes/zohoRoutes.js';
 import llmRoutes from './routes/llmRoutes.js';
 import whatsappRoutes from './routes/whatsappRoutes.js';
 import { whatsappService } from './services/whatsappService.js';
+import { initializeAllTenants } from './services/tenantRegistry.js';
 
 
 const app = express();
@@ -57,6 +58,9 @@ const server = app.listen(PORT, () => {
   console.log(`🩺 Health check: http://localhost:${PORT}/health`);
   console.log(`📱 WhatsApp Dashboard: http://localhost:${PORT}/whatsapp`);
   console.log(`==================================================\n`);
+
+  // Initialize and validate all active tenants
+  initializeAllTenants();
 
   if (process.env['START_WHATSAPP'] === 'true') {
     console.log('[WhatsApp] Initializing WhatsApp connection...');

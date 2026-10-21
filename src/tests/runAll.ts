@@ -21,6 +21,9 @@ try {
   console.log('--- 6. LLM Fallback & Resilience Tests ---');
   execSync('npx.cmd tsx src/tests/llmFallback.test.ts', { stdio: 'inherit' });
 
+  console.log('--- 7. Multi-Tenancy Tests ---');
+  execSync('npx.cmd tsx src/tests/multiTenancy.test.ts', { stdio: 'inherit' });
+
   console.log('🎉 ALL TEST SUITES PASSED SUCCESSFULLY!\n');
 } catch (error) {
   console.error('\n❌ One or more test suites failed.');

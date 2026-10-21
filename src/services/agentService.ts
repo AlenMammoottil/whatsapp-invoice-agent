@@ -12,6 +12,8 @@ export interface AgentProcessInput {
   senderJid?: string;
   messageId?: string;
   groupId?: string;
+  /** Tenant ID resolved from the WhatsApp group. Drives Zoho org and data isolation. */
+  tenantId?: string;
   providerName?: string;
   /** Explicit LLM provider instance to use (overrides providerName lookup) */
   llmProvider?: ILLMProvider;
@@ -30,6 +32,8 @@ export interface AgentProcessOutput {
   duplicateDetected: boolean;
   isPendingApproval?: boolean;
   latencyMs: number;
+  /** The tenant that processed this message (for multi-tenant traceability) */
+  tenantId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,10 +57,12 @@ export class AgentService {
   }
 
   /**
-   * Generates a stable idempotency reference number from message metadata
+   * Generates a stable idempotency reference number from message metadata.
+   * Scoped by tenantId to prevent cross-tenant hash collisions.
    */
   private generateReferenceNumber(input: AgentProcessInput): string {
-    const raw = `${input.groupId || 'direct'}_${input.messageId || input.messageText.trim().toLowerCase()}`;
+    const tenantScope = input.tenantId || 'default';
+    const raw = `${tenantScope}_${input.groupId || 'direct'}_${input.messageId || input.messageText.trim().toLowerCase()}`;
     const hash = crypto.createHash('sha256').update(raw).digest('hex').substring(0, 12);
     return `WA-${hash.toUpperCase()}`;
   }
@@ -162,77 +168,80 @@ export class AgentService {
         clarificationNeeded: false,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId: input.tenantId,
       };
     }
 
-    const selectedIdx = this.parseClarificationReply(text, pending.options);
-
-    if (selectedIdx === -1) {
-      // Could not match the reply to any option
-      let optionList = pending.options.map((o, i) => `${i + 1}. ${o}`).join('\n');
-      return {
-        intent: 'INVOICE_REQUEST',
-        replyText: [
-          `❓ *I didn't understand that reply.*`,
-          `Please choose one of the following options by number or name:\n`,
-          optionList,
-          `\nOr reply *CANCEL* to discard this request.`,
-        ].join('\n'),
-        clarificationNeeded: true,
-        duplicateDetected: false,
-        latencyMs: Date.now() - startTime,
-      };
-    }
-
-    // Remove the clarification — we have an answer
-    this.storage.removePendingClarification(pending.clarification_id);
-
-    // ---- Apply the selected option to partialExtraction ----
     const extraction = pending.partialExtraction;
-    const selectedOption = pending.options[selectedIdx]!;
 
-    switch (pending.kind) {
-      case 'AMBIGUOUS_CUSTOMER':
-      case 'MISSING_CUSTOMER': {
-        // Strip price/parenthetical suffix to get clean name
-        const resolvedName = selectedOption.replace(/\s*\(.*\)\s*$/, '').trim();
-        extraction.customer_name = resolvedName;
-        break;
+    if (pending.kind === 'MISSING_QUANTITY') {
+      // User replied with a quantity — try to parse it
+      const qtyMatch = text.match(/(\d+(?:\.\d+)?)/);
+      const qty = qtyMatch ? parseFloat(qtyMatch[1]!) : null;
+      if (!qty || qty <= 0) {
+        // Still couldn't parse quantity — re-ask
+        const itemName = extraction.items[pending.item_index ?? 0]?.raw_item_name || 'item';
+        return {
+          intent: 'INVOICE_REQUEST',
+          replyText: `❓ *Quantity needed*\nHow many units of "${itemName}" should I invoice?\nPlease reply with just a number (e.g. "2" or "5").`,
+          clarificationNeeded: true,
+          duplicateDetected: false,
+          latencyMs: Date.now() - startTime,
+          tenantId: input.tenantId,
+        };
+      }
+      const itemIdx = pending.item_index ?? 0;
+      const item = extraction.items[itemIdx];
+      if (item) {
+        item.quantity = qty;
+      }
+      this.storage.removePendingClarification(pending.clarification_id);
+    } else {
+      const selectedIdx = this.parseClarificationReply(text, pending.options);
+
+      if (selectedIdx === -1) {
+        // Could not match the reply to any option
+        let optionList = pending.options.map((o, i) => `${i + 1}. ${o}`).join('\n');
+        return {
+          intent: 'INVOICE_REQUEST',
+          replyText: [
+            `❓ *I didn't understand that reply.*`,
+            `Please choose one of the following options by number or name:\n`,
+            optionList,
+            `\nOr reply *CANCEL* to discard this request.`,
+          ].join('\n'),
+          clarificationNeeded: true,
+          duplicateDetected: false,
+          latencyMs: Date.now() - startTime,
+          tenantId: input.tenantId,
+        };
       }
 
-      case 'AMBIGUOUS_ITEM':
-      case 'MISSING_ITEM': {
-        const itemIdx = pending.item_index ?? 0;
-        const item = extraction.items[itemIdx];
-        if (item) {
-          // Extract clean item name (strip price suffix like "(₹2500.00/qty)")
+      // Remove the clarification — we have an answer
+      this.storage.removePendingClarification(pending.clarification_id);
+
+      const selectedOption = pending.options[selectedIdx]!;
+
+      switch (pending.kind) {
+        case 'AMBIGUOUS_CUSTOMER':
+        case 'MISSING_CUSTOMER': {
+          // Strip price/parenthetical suffix to get clean name
           const resolvedName = selectedOption.replace(/\s*\(.*\)\s*$/, '').trim();
-          item.raw_item_name = resolvedName;
+          extraction.customer_name = resolvedName;
+          break;
         }
-        break;
-      }
 
-      case 'MISSING_QUANTITY': {
-        // User replied with a quantity — try to parse it
-        const qtyMatch = text.match(/(\d+(?:\.\d+)?)/);
-        const qty = qtyMatch ? parseFloat(qtyMatch[1]!) : null;
-        if (!qty || qty <= 0) {
-          // Still couldn't parse quantity — re-ask
-          const itemName = extraction.items[pending.item_index ?? 0]?.raw_item_name || 'item';
-          return {
-            intent: 'INVOICE_REQUEST',
-            replyText: `❓ *Quantity needed*\nHow many units of "${itemName}" should I invoice?\nPlease reply with just a number (e.g. "2" or "5").`,
-            clarificationNeeded: true,
-            duplicateDetected: false,
-            latencyMs: Date.now() - startTime,
-          };
+        case 'AMBIGUOUS_ITEM':
+        case 'MISSING_ITEM': {
+          const itemIdx = pending.item_index ?? 0;
+          const item = extraction.items[itemIdx];
+          if (item) {
+            // Extract clean item name (strip price suffix like "(₹2500.00/qty)")
+            const resolvedName = selectedOption.replace(/\s*\(.*\)\s*$/, '').trim();
+            item.raw_item_name = resolvedName;
+          }
+          break;
         }
-        const itemIdx = pending.item_index ?? 0;
-        const item = extraction.items[itemIdx];
-        if (item) {
-          item.quantity = qty;
-        }
-        break;
       }
     }
 
@@ -268,6 +277,7 @@ export class AgentService {
 
       const newClarification: PendingClarification = {
         clarification_id: `clar_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        tenant_id: pending.tenant_id || input.tenantId,
         group_id: groupId,
         sender_jid: senderJid,
         original_reference_number: pending.original_reference_number,
@@ -299,6 +309,7 @@ export class AgentService {
         clarificationNeeded: true,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId: input.tenantId,
       };
     }
 
@@ -309,6 +320,7 @@ export class AgentService {
         clarificationNeeded: false,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId: input.tenantId,
       };
     }
 
@@ -330,7 +342,7 @@ export class AgentService {
 
     if (priceQuestion && priceQuestion[1]) {
       const productQuery = priceQuestion[1].replace(/[?.]$/, '').trim();
-      return this.handleProductPriceQuestion(productQuery, text, startTime);
+      return this.handleProductPriceQuestion(productQuery, text, startTime, input.tenantId);
     }
 
     // Generic product list question — but still try to match a product name first
@@ -344,7 +356,7 @@ export class AgentService {
         .trim();
 
       if (cleaned.length > 2) {
-        return this.handleProductPriceQuestion(cleaned, text, startTime);
+        return this.handleProductPriceQuestion(cleaned, text, startTime, input.tenantId);
       }
     }
 
@@ -377,6 +389,7 @@ export class AgentService {
         clarificationNeeded: false,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId: input.tenantId,
       };
     } catch (error) {
       console.error('Failed to fetch Zoho catalog for question:', error);
@@ -386,6 +399,7 @@ export class AgentService {
         clarificationNeeded: false,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId: input.tenantId,
       };
     }
   }
@@ -394,7 +408,7 @@ export class AgentService {
    * Handle a specific product price question.
    * Uses the matching service to find the exact product from Zoho catalog.
    */
-  private async handleProductPriceQuestion(productQuery: string, originalText: string, startTime: number): Promise<AgentProcessOutput> {
+  private async handleProductPriceQuestion(productQuery: string, originalText: string, startTime: number, tenantId?: string): Promise<AgentProcessOutput> {
     try {
       const itemResult = await this.matchingService.matchItem(productQuery, 'catalog');
 
@@ -413,6 +427,7 @@ export class AgentService {
           clarificationNeeded: false,
           duplicateDetected: false,
           latencyMs: Date.now() - startTime,
+          tenantId,
         };
       }
 
@@ -430,6 +445,7 @@ export class AgentService {
           clarificationNeeded: true,
           duplicateDetected: false,
           latencyMs: Date.now() - startTime,
+          tenantId,
         };
       }
 
@@ -446,6 +462,7 @@ export class AgentService {
         clarificationNeeded: false,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId,
       };
     } catch (err) {
       console.error('[AgentService] Price question lookup failed:', err);
@@ -455,6 +472,7 @@ export class AgentService {
         clarificationNeeded: false,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId,
       };
     }
   }
@@ -502,8 +520,13 @@ export class AgentService {
     const now = Date.now();
     const expiresAt = now + 15 * 60 * 1000;
 
+    if (input.tenantId) {
+      matchResult.resolvedPayload.tenant_id = input.tenantId;
+    }
+
     const pendingApproval: PendingApproval = {
       approval_id: `appr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      tenant_id: input.tenantId,
       reference_number: referenceNumber,
       group_id: groupId,
       sender_jid: input.senderJid || 'unknown',
@@ -562,6 +585,7 @@ export class AgentService {
       duplicateDetected: false,
       isPendingApproval: true,
       latencyMs: Date.now() - startTime,
+      tenantId: input.tenantId,
     };
   }
 
@@ -586,13 +610,14 @@ export class AgentService {
       const pending = this.storage.findPendingApprovalForSender(
         groupId,
         senderJid,
-        approvalCmd.ref
+        approvalCmd.ref,
+        input.tenantId
       );
 
       if (!pending) {
         // If no pending approval, check if there is an active pending clarification to cancel
         if (approvalCmd.action === 'cancel' && senderJid) {
-          const clar = this.storage.findPendingClarificationForSender(groupId, senderJid);
+          const clar = this.storage.findPendingClarificationForSender(groupId, senderJid, input.tenantId);
           if (clar) {
             this.storage.removePendingClarification(clar.clarification_id);
             return {
@@ -601,6 +626,7 @@ export class AgentService {
               clarificationNeeded: false,
               duplicateDetected: false,
               latencyMs: Date.now() - startTime,
+              tenantId: input.tenantId,
             };
           }
         }
@@ -611,13 +637,14 @@ export class AgentService {
           clarificationNeeded: false,
           duplicateDetected: false,
           latencyMs: Date.now() - startTime,
+          tenantId: input.tenantId,
         };
       }
 
       if (approvalCmd.action === 'cancel') {
         this.storage.removePendingApproval(pending.approval_id);
         // Also remove any pending clarification tied to this sender
-        const clar = this.storage.findPendingClarificationForSender(groupId, senderJid);
+        const clar = this.storage.findPendingClarificationForSender(groupId, senderJid, input.tenantId);
         if (clar) this.storage.removePendingClarification(clar.clarification_id);
 
         return {
@@ -626,11 +653,15 @@ export class AgentService {
           clarificationNeeded: false,
           duplicateDetected: false,
           latencyMs: Date.now() - startTime,
+          tenantId: input.tenantId,
         };
       }
 
       if (approvalCmd.action === 'confirm') {
         const createdInvoice = await this.zohoService.createInvoice(pending.payload);
+        if (input.tenantId || pending.tenant_id) {
+          createdInvoice.tenant_id = input.tenantId || pending.tenant_id;
+        }
         this.storage.saveInvoice(createdInvoice);
         this.storage.removePendingApproval(pending.approval_id);
 
@@ -668,6 +699,7 @@ export class AgentService {
           clarificationNeeded: false,
           duplicateDetected: false,
           latencyMs: Date.now() - startTime,
+          tenantId: input.tenantId,
         };
       }
     }
@@ -680,7 +712,7 @@ export class AgentService {
     //     "2" or "Metro Wheels" is never re-classified as a new request.
     // -------------------------------------------------------------
     if (senderJid) {
-      const pendingClar = this.storage.findPendingClarificationForSender(groupId, senderJid);
+      const pendingClar = this.storage.findPendingClarificationForSender(groupId, senderJid, input.tenantId);
       if (pendingClar) {
         // MISSING_QUANTITY clarification: the user's reply IS the quantity, not an option selection
         if (pendingClar.kind === 'MISSING_QUANTITY') {
@@ -723,6 +755,7 @@ export class AgentService {
         clarificationNeeded: false,
         duplicateDetected: true,
         latencyMs: Date.now() - startTime,
+        tenantId: input.tenantId,
       };
     }
 
@@ -743,6 +776,7 @@ export class AgentService {
         clarificationNeeded: false,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId: input.tenantId,
       };
     }
 
@@ -772,6 +806,7 @@ export class AgentService {
         clarificationNeeded: false,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId: input.tenantId,
       };
     }
 
@@ -789,6 +824,7 @@ export class AgentService {
         clarificationNeeded: false,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId: input.tenantId,
       };
     }
 
@@ -830,6 +866,7 @@ export class AgentService {
 
         const pendingClar: PendingClarification = {
           clarification_id: `clar_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          tenant_id: input.tenantId,
           group_id: groupId,
           sender_jid: senderJid,
           original_reference_number: referenceNumber,
@@ -866,6 +903,7 @@ export class AgentService {
         clarificationNeeded: true,
         duplicateDetected: false,
         latencyMs: Date.now() - startTime,
+        tenantId: input.tenantId,
       };
     }
 

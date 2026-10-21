@@ -12,6 +12,8 @@ export interface PersistedState {
 
 export class StorageService {
   private static instance: StorageService | null = null;
+  /** Per-tenant singletons: tenantId -> StorageService */
+  private static tenantInstances = new Map<string, StorageService>();
   private filePath: string;
   private state: PersistedState;
 
@@ -20,11 +22,30 @@ export class StorageService {
     this.state = this.loadState();
   }
 
+  /**
+   * Returns the default singleton StorageService (backward-compatible, legacy single-tenant).
+   */
   static getInstance(): StorageService {
     if (!this.instance) {
       this.instance = new StorageService();
     }
     return this.instance;
+  }
+
+  /**
+   * Returns a tenant-scoped StorageService (isolated data/agent_state.json per tenant).
+   * Instances are cached; calling twice with the same tenantId returns the same instance.
+   */
+  static createForTenant(tenantId: string): StorageService {
+    const cached = this.tenantInstances.get(tenantId);
+    if (cached) return cached;
+
+    // Sanitize tenant ID to safe path component (alphanumeric + _ + -)
+    const safeId = tenantId.replace(/[^a-zA-Z0-9_\-]/g, '_');
+    const filePath = path.resolve('data', safeId, 'agent_state.json');
+    const svc = new StorageService(filePath);
+    this.tenantInstances.set(tenantId, svc);
+    return svc;
   }
 
   /**
@@ -41,6 +62,13 @@ export class StorageService {
       processedMessageIds: [],
     } as PersistedState;
     return svc;
+  }
+
+  /**
+   * Clears the per-tenant instance cache. Call only in tests.
+   */
+  static _resetTenantInstances(): void {
+    this.tenantInstances.clear();
   }
 
   private loadState(): PersistedState {
@@ -142,10 +170,13 @@ export class StorageService {
     return approval;
   }
 
-  findPendingApprovalForSender(groupId: string, senderJid?: string, referenceNumber?: string): PendingApproval | null {
+  findPendingApprovalForSender(groupId: string, senderJid?: string, referenceNumber?: string, tenantId?: string): PendingApproval | null {
     this.cleanExpiredApprovals();
 
-    const approvals = Object.values(this.state.pendingApprovals);
+    let approvals = Object.values(this.state.pendingApprovals);
+    if (tenantId) {
+      approvals = approvals.filter((a) => !a.tenant_id || a.tenant_id === tenantId);
+    }
 
     // If explicit reference given, match it first
     if (referenceNumber) {
@@ -202,13 +233,16 @@ export class StorageService {
 
   /**
    * Find the most recent non-expired clarification for a specific sender in a group.
-   * Ownership policy: clarification is scoped to (group_id, sender_jid) pair.
-   * An unrelated sender cannot resolve another person's clarification.
+   * Scoped to (group_id, sender_jid) pair and optional tenantId.
+   * An unrelated sender or tenant cannot resolve another person's clarification.
    */
-  findPendingClarificationForSender(groupId: string, senderJid: string): PendingClarification | null {
+  findPendingClarificationForSender(groupId: string, senderJid: string, tenantId?: string): PendingClarification | null {
     this.cleanExpiredClarifications();
 
-    const all = Object.values(this.state.pendingClarifications);
+    let all = Object.values(this.state.pendingClarifications);
+    if (tenantId) {
+      all = all.filter((c) => !c.tenant_id || c.tenant_id === tenantId);
+    }
     const matches = all
       .filter((c) => c.group_id === groupId && c.sender_jid === senderJid)
       .sort((a, b) => b.created_at - a.created_at);

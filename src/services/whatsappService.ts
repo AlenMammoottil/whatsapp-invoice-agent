@@ -7,21 +7,24 @@ import pino from 'pino';
 import QRCode from 'qrcode';
 import { AgentService, AgentProcessInput, AgentProcessOutput } from './agentService.js';
 import { ZohoFactory } from './zohoFactory.js';
+import { resolveTenantContextByGroup } from './tenantRegistry.js';
+import { getAllTenants } from '../config/tenantConfig.js';
 
 export class WhatsAppService {
   private sock: WASocket | null = null;
-  private agentService: AgentService;
+  /** Legacy single-tenant fallback agent (used by simulateMessage when no tenantId specified) */
+  private legacyAgentService: AgentService;
   private qrCodeString: string | null = null;
   private qrDataUrl: string | null = null;
   private isConnected = false;
   private authFolder = './baileys_auth';
 
   constructor() {
-    this.agentService = new AgentService(ZohoFactory.getService());
+    this.legacyAgentService = new AgentService(ZohoFactory.getService());
   }
 
   /**
-   * Initializes the Baileys WhatsApp client and event listeners
+   * Initializes the Baileys WhatsApp client and event listeners.
    */
   async start(): Promise<void> {
     try {
@@ -30,7 +33,7 @@ export class WhatsAppService {
       this.sock = makeWASocket({
         auth: state,
         logger: pino({ level: 'silent' }), // Suppress verbose Baileys network trace
-        printQRInTerminal: false, // We'll print a clean customized QR
+        printQRInTerminal: false, // We print a clean customized QR below
       });
 
       // Handle credentials update
@@ -82,20 +85,25 @@ export class WhatsAppService {
           const remoteJid = msg.key.remoteJid;
           if (!remoteJid) continue;
 
-          // Check if message is from a WhatsApp Group (@g.us)
+          // Only process group messages
           const isGroup = remoteJid.endsWith('@g.us');
           if (!isGroup) continue;
 
-          // Target group check
-          const configuredGroupId = process.env['WHATSAPP_GROUP_ID'];
-          if (configuredGroupId && remoteJid !== configuredGroupId) {
-            console.log(`[WhatsApp] Ignored message from unconfigured group: ${remoteJid}`);
-            continue;
-          }
+          // ── Tenant Resolution ────────────────────────────────────────────────
+          // Resolve the tenant deterministically from the group JID.
+          // Messages from unauthorized or unmapped groups are silently dropped.
+          const tenantCtx = resolveTenantContextByGroup(remoteJid);
 
-          if (!configuredGroupId) {
-            console.log(`[WhatsApp] Received group message from JID: ${remoteJid}`);
-            console.log(`👉 To bind the bot specifically to this group, add to your .env:\nWHATSAPP_GROUP_ID=${remoteJid}\n`);
+          if (!tenantCtx) {
+            const tenantCount = getAllTenants().length;
+            if (tenantCount === 0) {
+              // No tenants configured at all — hint for new installations
+              console.log(`[WhatsApp] Received group message from JID: ${remoteJid}`);
+              console.log(`👉 Add this group to tenants.json (or set WHATSAPP_GROUP_ID + ZOHO credentials in .env) to enable the bot.`);
+            } else {
+              console.log(`[WhatsApp] Ignored message from unauthorized group: ${remoteJid}`);
+            }
+            continue;
           }
 
           // Extract text content from message
@@ -108,21 +116,22 @@ export class WhatsAppService {
           if (!messageText.trim()) continue;
 
           const senderName = msg.pushName || 'WhatsApp User';
-          console.log(`\n📩 [WhatsApp] Incoming message in ${remoteJid} from ${senderName}: "${messageText}"`);
+          console.log(`\n📩 [WhatsApp][${tenantCtx.tenant.tenantId}] Incoming in ${remoteJid} from ${senderName}: "${messageText}"`);
 
           try {
-            // Process message through Agent Brain
-            const result = await this.agentService.processIncomingMessage({
+            // Process message through this tenant's Agent
+            const result = await tenantCtx.agentService.processIncomingMessage({
               messageText,
               senderName,
               senderJid: msg.key.participant || remoteJid,
               messageId: msg.key.id || undefined,
               groupId: remoteJid,
+              tenantId: tenantCtx.tenant.tenantId,
             });
 
             // 1. Send the text response
             await this.sock?.sendMessage(remoteJid, { text: result.replyText });
-            console.log(`📤 [WhatsApp] Sent reply to ${remoteJid}`);
+            console.log(`📤 [WhatsApp][${tenantCtx.tenant.tenantId}] Sent reply to ${remoteJid}`);
 
             // 2. If an invoice PDF was generated, send the PDF document
             if (result.pdfBuffer && result.pdfFilename) {
@@ -132,10 +141,10 @@ export class WhatsAppService {
                 fileName: result.pdfFilename,
                 caption: `Invoice PDF for ${result.invoice?.customer_name || 'Customer'}`,
               });
-              console.log(`📎 [WhatsApp] Sent invoice PDF (${result.pdfFilename}) to ${remoteJid}`);
+              console.log(`📎 [WhatsApp][${tenantCtx.tenant.tenantId}] Sent invoice PDF (${result.pdfFilename}) to ${remoteJid}`);
             }
           } catch (err: any) {
-            console.error('[WhatsApp] Error processing message:', err);
+            console.error(`[WhatsApp][${tenantCtx.tenant.tenantId}] Error processing message:`, err);
             await this.sock?.sendMessage(remoteJid, {
               text: `⚠️ *Error Processing Request:*\n${err.message || 'An unexpected error occurred while processing your request.'}`,
             });
@@ -148,10 +157,35 @@ export class WhatsAppService {
   }
 
   /**
-   * Allows simulated testing of WhatsApp messages via HTTP
+   * Allows simulated testing of WhatsApp messages via HTTP.
+   * If a tenantId is provided (or derivable from groupId), uses the tenant's agent.
+   * Falls back to the legacy single-tenant agent for backward compatibility.
    */
   async simulateMessage(input: AgentProcessInput): Promise<AgentProcessOutput> {
-    return this.agentService.processIncomingMessage(input);
+    // Attempt tenant resolution from groupId if tenantId not explicitly given
+    if (!input.tenantId && input.groupId && input.groupId.endsWith('@g.us')) {
+      const tenantCtx = resolveTenantContextByGroup(input.groupId);
+      if (tenantCtx) {
+        return tenantCtx.agentService.processIncomingMessage({
+          ...input,
+          tenantId: tenantCtx.tenant.tenantId,
+        });
+      }
+    }
+
+    // Explicit tenantId provided — look it up
+    if (input.tenantId) {
+      const { getTenantById } = await import('../config/tenantConfig.js');
+      const { getTenantContext } = await import('./tenantRegistry.js');
+      const tenant = getTenantById(input.tenantId);
+      if (tenant) {
+        const ctx = getTenantContext(tenant);
+        return ctx.agentService.processIncomingMessage(input);
+      }
+    }
+
+    // Legacy fallback: use the default single-tenant agent
+    return this.legacyAgentService.processIncomingMessage(input);
   }
 
   /**
@@ -162,6 +196,7 @@ export class WhatsAppService {
       connected: this.isConnected,
       hasQrCode: Boolean(this.qrCodeString),
       qrDataUrl: this.qrDataUrl,
+      tenantCount: getAllTenants().length,
       configuredGroupId: process.env['WHATSAPP_GROUP_ID'] || null,
     };
   }

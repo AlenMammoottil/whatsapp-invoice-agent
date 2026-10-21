@@ -11,7 +11,7 @@ router.get('/api/whatsapp/status', (_req: Request, res: Response) => {
 // 2. Simulated WhatsApp message endpoint
 router.post('/api/whatsapp/simulate', async (req: Request, res: Response) => {
   try {
-    const { message, senderName, groupId, provider } = req.body;
+    const { message, senderName, groupId, provider, tenantId } = req.body;
     if (!message || typeof message !== 'string') {
       res.status(400).json({ error: 'A string "message" field is required' });
       return;
@@ -22,6 +22,7 @@ router.post('/api/whatsapp/simulate', async (req: Request, res: Response) => {
       senderName: senderName || 'Simulation User',
       groupId: groupId || 'test-group@g.us',
       providerName: provider,
+      tenantId: tenantId || undefined,
     });
 
     res.json({
@@ -32,6 +33,7 @@ router.post('/api/whatsapp/simulate', async (req: Request, res: Response) => {
       invoice: output.invoice || null,
       pdfUrl: output.invoice ? output.invoice.pdf_url : null,
       latencyMs: output.latencyMs,
+      tenantId: output.tenantId || null,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

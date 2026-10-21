@@ -120,6 +120,7 @@ export const InvoiceLineItemSchema = z.object({
 export type InvoiceLineItem = z.infer<typeof InvoiceLineItemSchema>;
 
 export const CreateInvoicePayloadSchema = z.object({
+  tenant_id: z.string().optional(),
   customer_id: z.string(),
   reference_number: z.string(), // idempotency key (e.g. hash of message) to prevent duplicates
   line_items: z.array(
@@ -141,6 +142,7 @@ export const CreateInvoicePayloadSchema = z.object({
 export type CreateInvoicePayload = z.infer<typeof CreateInvoicePayloadSchema>;
 
 export const InvoiceSchema = z.object({
+  tenant_id: z.string().optional(),
   invoice_id: z.string(),
   invoice_number: z.string(),
   reference_number: z.string(),
@@ -167,6 +169,7 @@ export type Invoice = z.infer<typeof InvoiceSchema>;
 
 export const PendingApprovalSchema = z.object({
   approval_id: z.string(),
+  tenant_id: z.string().optional(),
   reference_number: z.string(),
   group_id: z.string(),
   sender_jid: z.string(),
@@ -212,6 +215,8 @@ export type ClarificationKind =
 export interface PendingClarification {
   /** Unique ID for this clarification session */
   clarification_id: string;
+  /** Tenant ID to which this clarification belongs */
+  tenant_id?: string;
   /** WhatsApp group (or 'direct') the original message arrived in */
   group_id: string;
   /** JID of the user who sent the original request */
@@ -254,3 +259,69 @@ export interface PendingClarification {
   /** Epoch ms after which the clarification expires (default 10 min) */
   expires_at: number;
 }
+
+// ==========================================
+// 8. Multi-Tenant Configuration Schemas
+// ==========================================
+
+export const TenantZohoConfigSchema = z.object({
+  clientId: z.string().optional(),
+  clientSecret: z.string().optional(),
+  refreshToken: z.string().optional(),
+  organizationId: z.string().min(1, 'Zoho organization ID is required'),
+  baseUrl: z.string().url().default('https://www.zohoapis.com/books/v3').optional(),
+  accountsUrl: z.string().url().default('https://accounts.zoho.com').optional(),
+  mock: z.boolean().default(false).optional(),
+  mode: z.enum(['live', 'mock']).optional(),
+});
+
+export type TenantZohoConfig = z.infer<typeof TenantZohoConfigSchema>;
+
+export const TenantInvoiceSettingsSchema = z.object({
+  currency: z.string().default('INR').optional(),
+  paymentTermsDays: z.number().int().nonnegative().default(30).optional(),
+  notesTemplate: z.string().optional(),
+  requireConfirmation: z.boolean().default(true).optional(),
+  priceOverrideAllowed: z.boolean().default(true).optional(),
+});
+
+export type TenantInvoiceSettings = z.infer<typeof TenantInvoiceSettingsSchema>;
+
+export const TenantConfigSchema = z.object({
+  tenantId: z.string().min(1, 'Tenant ID is required').regex(/^[a-zA-Z0-9_\-]+$/, 'Tenant ID must be alphanumeric, underscores or hyphens'),
+  businessName: z.string().min(1, 'Business name is required'),
+  authorizedGroupIds: z.array(z.string().min(1)).min(1, 'At least one authorized WhatsApp group ID is required'),
+  zoho: TenantZohoConfigSchema,
+  invoiceSettings: TenantInvoiceSettingsSchema.default({}).optional(),
+  enabled: z.boolean().default(true).optional(),
+  mock: z.boolean().default(false).optional(),
+  mode: z.enum(['live', 'mock']).optional(),
+}).superRefine((val, ctx) => {
+  const isMock = val.mock === true || val.mode === 'mock' || val.zoho.mock === true || val.zoho.mode === 'mock';
+  if (!isMock) {
+    if (!val.zoho.clientId || val.zoho.clientId.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Zoho client ID is required for live tenants',
+        path: ['zoho', 'clientId'],
+      });
+    }
+    if (!val.zoho.clientSecret || val.zoho.clientSecret.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Zoho client secret is required for live tenants',
+        path: ['zoho', 'clientSecret'],
+      });
+    }
+    if (!val.zoho.refreshToken || val.zoho.refreshToken.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Zoho refresh token is required for live tenants',
+        path: ['zoho', 'refreshToken'],
+      });
+    }
+  }
+});
+
+export type TenantConfig = z.infer<typeof TenantConfigSchema>;
+
